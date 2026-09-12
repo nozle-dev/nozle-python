@@ -16,6 +16,7 @@ _SENSITIVE_KEYS = {
     "secret",
     "secret_key",
     "token",
+    "razorpay_signature",
 }
 
 
