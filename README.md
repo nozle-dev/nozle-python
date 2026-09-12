@@ -329,3 +329,35 @@ messages redact API keys and secret-shaped response fields.
 ## License
 
 AGPL-3.0-or-later
+
+### Razorpay checkout
+
+The existing checkout method works with the customer's configured payment
+provider. Stripe responses remain compatible; Razorpay adds `razorpay`, `hosted`
+and `processing` response variants.
+
+```python
+checkout = nozle.checkout(
+    customer_id, "pro", return_url,
+    idempotency_key=attempt_id,
+    register_mandate=True,  # optional, explicit invoice-based UPI AutoPay setup
+)
+checkout = nozle.checkout_invoice(invoice_id, idempotency_key=attempt_id)
+status = nozle.verify_checkout(checkout_id, {
+    "razorpay_order_id": callback["razorpay_order_id"],
+    "razorpay_payment_id": callback["razorpay_payment_id"],
+    "razorpay_signature": callback["razorpay_signature"],
+})
+status = nozle.checkout_status(checkout_id)
+```
+
+All collection calls require a server-side secret key. Authenticate the buyer and
+bind checkout IDs to that buyer before forwarding browser callbacks. Render the
+returned public `key_id`/`order_id` in Razorpay Standard Checkout. Display success
+only when `status` and `fulfillment_status` are both `succeeded`; a browser
+callback or a pending debit is not proof that credits/subscriptions are available.
+A `processing` checkout can be polled and resumed using its nested `checkout`
+response once ready. Reuse your idempotency key when retrying creation.
+
+Razorpay support is INR-only. UPI AutoPay requires merchant enablement and explicit
+customer authorization; one-time card or UPI payments do not create a mandate.

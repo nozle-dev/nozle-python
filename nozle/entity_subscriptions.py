@@ -70,6 +70,7 @@ class EntitySubscriptionsNamespace:
         return_url: str | None = None,
         billing_time: str | None = None,
         idempotency_key: str | None = None,
+        register_mandate: bool | None = None,
     ) -> CheckoutResult:
         return self._change(
             "checkout",
@@ -79,6 +80,7 @@ class EntitySubscriptionsNamespace:
             return_url=return_url,
             billing_time=billing_time,
             idempotency_key=idempotency_key,
+            register_mandate=register_mandate,
         )
 
     def checkout_many(
@@ -202,6 +204,7 @@ class EntitySubscriptionsNamespace:
         return_url: str | None = None,
         billing_time: str | None = None,
         idempotency_key: str | None = None,
+        register_mandate: bool | None = None,
     ) -> CheckoutResult:
         operation = f"entity_subscriptions.{action.replace('-', '_')}"
         self._validate_path(customer_id, entity_id, operation)
@@ -222,6 +225,11 @@ class EntitySubscriptionsNamespace:
                     "plan_code": plan_code,
                     "return_url": return_url,
                     "billing_time": billing_time,
+                    **(
+                        {"register_mandate": register_mandate}
+                        if register_mandate is not None
+                        else {}
+                    ),
                 },
                 headers=headers,
             ),
