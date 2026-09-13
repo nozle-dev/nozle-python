@@ -28,8 +28,8 @@ from nozle import Nozle
 
 nozle = Nozle(
     api_key="sk_backend_...",
-    base_url="https://api.nozle.ai",
-    events_url="https://core.nozle.ai",
+    base_url="https://api.nozle.app/engine",
+    events_url="https://api.nozle.app/core",
     timeout=15,
 )
 ```

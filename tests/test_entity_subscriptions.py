@@ -35,7 +35,7 @@ def entity_subscription() -> dict[str, object]:
 def test_entity_subscription_ensure_get_and_checkout(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    path = "https://core.example/api/v1/customers/workspace%2F1/entities/user%2F42/subscription"
+    path = "https://api.example/core/api/v1/customers/workspace%2F1/entities/user%2F42/subscription"
     requests_mock.put(path, status_code=201, json={"entity_subscription": entity_subscription()})
     requests_mock.get(path, json={"entity_subscription": entity_subscription()})
     requests_mock.post(
@@ -47,7 +47,7 @@ def test_entity_subscription_ensure_get_and_checkout(
             "external_subscription_id": "entity-sub-1",
         },
     )
-    namespace = Nozle("sk_test", events_url="https://core.example").entity_subscriptions
+    namespace = Nozle("sk_test", events_url="https://api.example/core").entity_subscriptions
 
     assert namespace.ensure("workspace/1", "user/42")["status"] == "active"
     assert namespace.get("workspace/1", "user/42")["current_plan"]["code"] == "pro"
@@ -72,7 +72,7 @@ def test_entity_subscription_ensure_get_and_checkout(
 def test_entity_subscription_cancel_and_local_validation(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    path = "https://core.example/api/v1/customers/workspace/entities/user-42/subscription/cancel"
+    path = "https://api.example/core/api/v1/customers/workspace/entities/user-42/subscription/cancel"
     requests_mock.post(
         path,
         json={
@@ -80,7 +80,7 @@ def test_entity_subscription_cancel_and_local_validation(
             "subscription_transition": {"id": "transition-1", "replayed": False},
         },
     )
-    namespace = Nozle("sk_test", events_url="https://core.example").entity_subscriptions
+    namespace = Nozle("sk_test", events_url="https://api.example/core").entity_subscriptions
 
     result = namespace.cancel(
         "workspace",
@@ -98,7 +98,7 @@ def test_entity_subscription_cancel_and_local_validation(
 
 
 def test_bulk_entity_subscription_checkout(requests_mock: requests_mock.Mocker) -> None:
-    path = "https://core.example/api/v1/customers/workspace%2F1/entity-subscriptions/checkout"
+    path = "https://api.example/core/api/v1/customers/workspace%2F1/entity-subscriptions/checkout"
     requests_mock.post(
         path,
         json={
@@ -123,7 +123,7 @@ def test_bulk_entity_subscription_checkout(requests_mock: requests_mock.Mocker) 
             }
         },
     )
-    namespace = Nozle("sk_test", events_url="https://core.example").entity_subscriptions
+    namespace = Nozle("sk_test", events_url="https://api.example/core").entity_subscriptions
 
     result = namespace.checkout_many(
         "workspace/1",
