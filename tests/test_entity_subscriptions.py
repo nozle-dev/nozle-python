@@ -72,7 +72,9 @@ def test_entity_subscription_ensure_get_and_checkout(
 def test_entity_subscription_cancel_and_local_validation(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    path = "https://api.example/core/api/v1/customers/workspace/entities/user-42/subscription/cancel"
+    path = (
+        "https://api.example/core/api/v1/customers/workspace/entities/user-42/subscription/cancel"
+    )
     requests_mock.post(
         path,
         json={

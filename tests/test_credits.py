@@ -109,9 +109,7 @@ def test_credit_systems_list_paginates_every_active_core_page(
 def test_customer_credit_reads_escape_identifiers_and_preserve_exact_values(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    balance_url = (
-        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance"
-    )
+    balance_url = "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance"
     requests_mock.get(
         balance_url,
         json={
