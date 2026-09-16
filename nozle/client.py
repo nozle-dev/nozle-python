@@ -50,8 +50,8 @@ class Nozle:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "http://localhost:8080",
-        events_url: str = "http://localhost:3000",
+        base_url: str = "https://api.nozle.app/engine",
+        events_url: str = "https://api.nozle.app/core",
         timeout: float = 10,
         *,
         _session: Optional[requests.Session] = None,

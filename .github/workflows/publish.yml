@@ -2,32 +2,45 @@ name: Publish to PyPI
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 permissions:
-  id-token: write
+  contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  test-and-build:
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "${RELEASE_TAG}" = "v$(python -c 'from nozle import __version__; print(__version__)')"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
       - run: pytest
+      - run: ruff check nozle tests
+      - run: mypy nozle --ignore-missing-imports
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk
+          path: dist/*
+          if-no-files-found: error
 
   publish:
-    needs: test
+    needs: test-and-build
     runs-on: ubuntu-latest
     environment: pypi
+    permissions:
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v4
         with:
-          python-version: "3.12"
-      - run: pip install build
-      - run: python -m build
+          name: python-sdk
+          path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1

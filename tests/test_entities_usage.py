@@ -25,17 +25,17 @@ def entity(status: str = "active") -> dict[str, object]:
 
 
 def test_entity_get_list_and_upsert_contract(requests_mock: requests_mock.Mocker) -> None:
-    item_url = "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42"
+    item_url = "https://api.example/engine/api/v1/customers/acme%2Fwest/entities/user%2F42"
     requests_mock.get(item_url, json={"entity": entity()})
     requests_mock.get(
-        "https://engine.example/api/v1/customers/acme%2Fwest/entities",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/entities",
         json={"customer_id": "acme/west", "entities": [entity()], "next_cursor": None},
     )
     requests_mock.put(
         item_url,
         json={"action": "updated", "entity": entity(), "replayed": False},
     )
-    entities = Nozle("sk_test", base_url="https://engine.example").entities
+    entities = Nozle("sk_test", base_url="https://api.example/engine").entities
 
     assert entities.get("acme/west", "user/42")["external_id"] == "user/42"
     page = entities.list("acme/west", status="active", limit=25, cursor="cursor/1")
@@ -69,13 +69,13 @@ def test_entity_get_list_and_upsert_contract(requests_mock: requests_mock.Mocker
 def test_entity_lifecycle_preserves_name_and_metadata(
     requests_mock: requests_mock.Mocker, method: str, target_status: str
 ) -> None:
-    url = "https://engine.example/api/v1/customers/acme/entities/user-42"
+    url = "https://api.example/engine/api/v1/customers/acme/entities/user-42"
     requests_mock.get(url, json={"entity": entity()})
     requests_mock.put(
         url,
         json={"action": target_status, "entity": entity(target_status), "replayed": False},
     )
-    namespace = Nozle("sk_test", base_url="https://engine.example").entities
+    namespace = Nozle("sk_test", base_url="https://api.example/engine").entities
 
     result = getattr(namespace, method)("acme", "user-42", idempotency_key=f"{method}-1")
 
@@ -91,12 +91,12 @@ def test_bulk_entity_upsert_supports_wire_shape_and_maximum_batch(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     matcher = requests_mock.post(
-        "https://engine.example/api/v1/customers/acme/entities/bulk-upsert",
+        "https://api.example/engine/api/v1/customers/acme/entities/bulk-upsert",
         json={"customer_id": "acme", "entities": [], "counts": {}, "replayed": False},
     )
     items = [{"external_id": f"user-{index}", "status": "active"} for index in range(500)]
 
-    Nozle("sk_test", base_url="https://engine.example").entities.bulk_upsert(
+    Nozle("sk_test", base_url="https://api.example/engine").entities.bulk_upsert(
         "acme", items, idempotency_key="import-1"
     )
 
@@ -174,7 +174,7 @@ def test_usage_check_is_advisory_and_preserves_exact_decimal_contract(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     requests_mock.post(
-        "https://engine.example/api/v1/usage/check",
+        "https://api.example/engine/api/v1/usage/check",
         json={
             "advisory": True,
             "allowed": True,
@@ -196,7 +196,7 @@ def test_usage_check_is_advisory_and_preserves_exact_decimal_contract(
             ],
         },
     )
-    usage = Nozle("sk_test", base_url="https://engine.example").usage
+    usage = Nozle("sk_test", base_url="https://api.example/engine").usage
 
     result = usage.check(
         "acme",
@@ -224,7 +224,7 @@ def test_usage_track_is_mutating_and_uses_exact_timestamp_and_idempotency(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     matcher = requests_mock.post(
-        "https://engine.example/api/v1/usage/track",
+        "https://api.example/engine/api/v1/usage/track",
         json={
             "allowed": True,
             "operation_id": "operation-1",
@@ -240,7 +240,7 @@ def test_usage_track_is_mutating_and_uses_exact_timestamp_and_idempotency(
             ],
         },
     )
-    usage = Nozle("sk_test", base_url="https://engine.example").usage
+    usage = Nozle("sk_test", base_url="https://api.example/engine").usage
 
     result = usage.track(
         "acme",
@@ -266,7 +266,7 @@ def test_usage_default_timestamps_are_utc_rfc3339_milliseconds(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     requests_mock.post(
-        "http://localhost:8080/api/v1/usage/check",
+        "https://api.nozle.app/engine/api/v1/usage/check",
         json={
             "advisory": True,
             "allowed": False,
@@ -277,7 +277,7 @@ def test_usage_default_timestamps_are_utc_rfc3339_milliseconds(
         },
     )
     requests_mock.post(
-        "http://localhost:8080/api/v1/usage/track",
+        "https://api.nozle.app/engine/api/v1/usage/track",
         json={"allowed": False},
     )
     usage = Nozle("sk_test").usage

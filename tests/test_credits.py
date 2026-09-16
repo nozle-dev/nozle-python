@@ -77,12 +77,12 @@ def test_credit_systems_list_paginates_every_active_core_page(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     first = requests_mock.get(
-        "https://core.example/api/v1/credit-systems?status=active&page=1&per_page=100",
+        "https://api.example/core/api/v1/credit-systems?status=active&page=1&per_page=100",
         json={"credit_systems": [core_credit_system("system-1", "ai")], "meta": {"next_page": 2}},
         complete_qs=True,
     )
     second = requests_mock.get(
-        "https://core.example/api/v1/credit-systems?status=active&page=2&per_page=100",
+        "https://api.example/core/api/v1/credit-systems?status=active&page=2&per_page=100",
         json={
             "credit_systems": [core_credit_system("system-2", "api")],
             "meta": {"next_page": None},
@@ -90,7 +90,7 @@ def test_credit_systems_list_paginates_every_active_core_page(
         complete_qs=True,
     )
 
-    systems = Nozle("sk_test", events_url="https://core.example").credit_systems.list()
+    systems = Nozle("sk_test", events_url="https://api.example/core").credit_systems.list()
 
     assert [system["code"] for system in systems] == ["ai", "api"]
     assert systems[0] == {
@@ -109,9 +109,7 @@ def test_credit_systems_list_paginates_every_active_core_page(
 def test_customer_credit_reads_escape_identifiers_and_preserve_exact_values(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    balance_url = (
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance"
-    )
+    balance_url = "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance"
     requests_mock.get(
         balance_url,
         json={
@@ -127,14 +125,14 @@ def test_customer_credit_reads_escape_identifiers_and_preserve_exact_values(
         },
     )
     requests_mock.get(
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems",
         json={
             "customer_id": "acme/west",
             "as_of": "2026-07-20T12:00:00.750Z",
             "balances": [{"available": "500.000000000001"}],
         },
     )
-    client = Nozle("sk_test", base_url="https://engine.example")
+    client = Nozle("sk_test", base_url="https://api.example/engine")
 
     balance = client.credits.get_balance("acme/west", "ai credits")
     balances = client.credits.list_balances("acme/west")
@@ -149,14 +147,14 @@ def test_customer_operations_preserve_ledger_fields_and_nullable_cursor(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     requests_mock.get(
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-operations",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-operations",
         json={
             "customer_id": "acme/west",
             "operations": [operation()],
             "next_cursor": None,
         },
     )
-    client = Nozle("sk_test", base_url="https://engine.example")
+    client = Nozle("sk_test", base_url="https://api.example/engine")
 
     page = client.credits.list_operations(
         "acme/west",
@@ -177,7 +175,7 @@ def test_customer_operations_preserve_ledger_fields_and_nullable_cursor(
 def test_entity_credit_reads_preserve_pool_and_provenance(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    base = "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42"
+    base = "https://api.example/engine/api/v1/customers/acme%2Fwest/entities/user%2F42"
     requests_mock.get(
         f"{base}/credit-systems/ai%20credits/balance",
         json={
@@ -217,7 +215,7 @@ def test_entity_credit_reads_preserve_pool_and_provenance(
             "next_cursor": None,
         },
     )
-    client = Nozle("sk_test", base_url="https://engine.example")
+    client = Nozle("sk_test", base_url="https://api.example/engine")
 
     balance = client.credits.get_entity_balance("acme/west", "user/42", "ai credits")
     balances = client.credits.list_entity_balances("acme/west", "user/42")
@@ -236,7 +234,7 @@ def test_entity_credit_reads_preserve_pool_and_provenance(
 def test_allocate_and_deallocate_send_exact_decimal_and_idempotency(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    base = "https://engine.example/api/v1/customers/acme/entities/user-42"
+    base = "https://api.example/engine/api/v1/customers/acme/entities/user-42"
     allocate = requests_mock.post(
         f"{base}/credit-allocations",
         status_code=201,
@@ -270,7 +268,7 @@ def test_allocate_and_deallocate_send_exact_decimal_and_idempotency(
             "replayed": False,
         },
     )
-    credits = Nozle("sk_test", base_url="https://engine.example").credits
+    credits = Nozle("sk_test", base_url="https://api.example/engine").credits
 
     result = credits.allocate(
         "acme",

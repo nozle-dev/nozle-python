@@ -6,8 +6,10 @@ import requests_mock
 from nozle import Nozle, NozleAuthenticationError
 
 
-def test_checkout_options_and_authoritative_confirmation() -> None:
-    client = Nozle("sk_test", base_url="https://engine.example")
+@pytest.mark.parametrize("base_url", [None, "https://engine.example", "https://api.example/nested/engine///"])
+def test_checkout_options_and_authoritative_confirmation(base_url: str | None) -> None:
+    client = Nozle("sk_test") if base_url is None else Nozle("sk_test", base_url=base_url)
+    expected_base = (base_url or "https://api.nozle.app/engine").rstrip("/")
     checkout = {
         "type": "razorpay",
         "checkout_id": "checkout-1",
@@ -30,7 +32,7 @@ def test_checkout_options_and_authoritative_confirmation() -> None:
         "razorpay_signature": "signature",
     }
     with requests_mock.Mocker() as mock:
-        create = mock.post("https://engine.example/api/v1/checkout", json=checkout)
+        create = mock.post(f"{expected_base}/api/v1/checkout", json=checkout)
         assert (
             client.checkout(
                 "customer", "pro", idempotency_key="same-attempt", register_mandate=True
@@ -41,10 +43,10 @@ def test_checkout_options_and_authoritative_confirmation() -> None:
         assert create.last_request.json()["register_mandate"] is True
         assert client.checkout_invoice("invoice-1", idempotency_key="invoice-retry") == checkout
         assert create.last_request.json() == {"invoice_id": "invoice-1"}
-        verify = mock.post("https://engine.example/api/v1/checkout/checkout-1/verify", json=status)
+        verify = mock.post(f"{expected_base}/api/v1/checkout/checkout-1/verify", json=status)
         assert client.verify_checkout("checkout-1", proof)["status"] == "processing"
         assert verify.last_request.json() == proof
-        mock.get("https://engine.example/api/v1/checkout/checkout-1", json=status)
+        mock.get(f"{expected_base}/api/v1/checkout/checkout-1", json=status)
         assert client.checkout_status("checkout-1")["fulfillment_status"] == "pending"
 
 
