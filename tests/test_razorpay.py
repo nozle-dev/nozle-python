@@ -6,7 +6,9 @@ import requests_mock
 from nozle import Nozle, NozleAuthenticationError
 
 
-@pytest.mark.parametrize("base_url", [None, "https://engine.example", "https://api.example/nested/engine///"])
+@pytest.mark.parametrize(
+    "base_url", [None, "https://engine.example", "https://api.example/nested/engine///"]
+)
 def test_checkout_options_and_authoritative_confirmation(base_url: str | None) -> None:
     client = Nozle("sk_test") if base_url is None else Nozle("sk_test", base_url=base_url)
     expected_base = (base_url or "https://api.nozle.app/engine").rstrip("/")
