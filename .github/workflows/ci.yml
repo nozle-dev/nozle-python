@@ -11,7 +11,7 @@ permissions:
 jobs:
   test:
     name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +26,7 @@ jobs:
       - run: python -m pytest -q
 
   quality:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +38,7 @@ jobs:
       - run: mypy nozle
 
   package:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,17 +46,21 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install build
       - run: python -m build
-      - run: python -m venv /tmp/nozle-wheel-test
-      - run: /tmp/nozle-wheel-test/bin/pip install dist/*.whl
+      - name: Install wheel into a fresh consumer
+        run: |
+          echo "EXPECTED_VERSION=$(python -c 'from nozle import __version__; print(__version__)')" >> "$GITHUB_ENV"
+          python -m venv "${RUNNER_TEMP}/nozle-wheel-test"
+          "${RUNNER_TEMP}/nozle-wheel-test/bin/pip" install dist/*.whl
       - name: Verify installed wheel
         run: |
           cd /tmp
-          /tmp/nozle-wheel-test/bin/python - <<'PY'
+          "${RUNNER_TEMP}/nozle-wheel-test/bin/python" - <<'PY'
+          import os
           import importlib.metadata
           import importlib.resources
           import nozle
 
-          assert nozle.__version__ == "0.6.1"
+          assert nozle.__version__ == os.environ["EXPECTED_VERSION"]
           assert importlib.metadata.version("nozle-sdk") == nozle.__version__
           assert importlib.resources.files("nozle").joinpath("py.typed").is_file()
           for name in nozle.__all__:
