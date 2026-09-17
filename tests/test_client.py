@@ -17,7 +17,7 @@ from nozle import (
 
 
 def test_version_metadata_and_runtime_match() -> None:
-    assert __version__ == "0.7.0"
+    assert __version__ == "0.8.0"
     assert version("nozle-sdk") == __version__
 
 

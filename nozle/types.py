@@ -105,7 +105,64 @@ class ScheduledCheckoutResult(_ScheduledCheckoutRequired, total=False):
     external_subscription_id: str
 
 
-CheckoutResult = Union[StripeCheckoutResult, CompletedCheckoutResult, ScheduledCheckoutResult]
+class _RazorpayCheckoutRequired(TypedDict):
+    type: Literal["razorpay"]
+    checkout_id: str
+    key_id: str
+    order_id: str
+    amount_cents: int
+    currency: str
+
+
+class RazorpayCheckoutResult(_RazorpayCheckoutRequired, total=False):
+    invoice_id: str
+    expires_at: str
+    customer_id: str
+    recurring: bool
+    mandate_max_amount_cents: int
+
+
+class ProcessingCheckoutResult(TypedDict):
+    type: Literal["processing"]
+    checkout_id: str
+    status: str
+
+
+class HostedCheckoutResult(TypedDict):
+    type: Literal["hosted"]
+    payment_url: str
+
+
+class RazorpayVerification(TypedDict):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+CheckoutResult = Union[
+    StripeCheckoutResult,
+    CompletedCheckoutResult,
+    ScheduledCheckoutResult,
+    RazorpayCheckoutResult,
+    ProcessingCheckoutResult,
+    HostedCheckoutResult,
+]
+
+
+class _CheckoutStatusRequired(TypedDict):
+    checkout_id: str
+    provider: Literal["razorpay"]
+    status: Literal[
+        "processing", "awaiting_payment", "succeeded", "failed", "expired", "needs_review"
+    ]
+    fulfillment_status: Literal["pending", "processing", "succeeded"]
+    amount_cents: int
+    currency: str
+
+
+class CheckoutStatus(_CheckoutStatusRequired, total=False):
+    invoice_id: Optional[str]
+    checkout: CheckoutResult
 
 
 class EntitySubscriptionPlan(TypedDict):
@@ -153,9 +210,9 @@ class EntitySubscriptionCheckoutItemResult(TypedDict):
     subscription_status: str
 
 
-class EntitySubscriptionCheckoutManyResult(TypedDict):
+class _EntitySubscriptionCheckoutManyRequired(TypedDict):
     id: str
-    type: Literal["stripe", "processing", "completed"]
+    type: Literal["stripe", "razorpay", "processing", "completed"]
     status: str
     client_secret: Optional[str]
     invoice_id: str
@@ -164,6 +221,12 @@ class EntitySubscriptionCheckoutManyResult(TypedDict):
     replayed: bool
     expires_at: Optional[str]
     items: List[EntitySubscriptionCheckoutItemResult]
+
+
+class EntitySubscriptionCheckoutManyResult(_EntitySubscriptionCheckoutManyRequired, total=False):
+    checkout_id: str
+    key_id: str
+    order_id: str
 
 
 class SubscribeResult(TypedDict):

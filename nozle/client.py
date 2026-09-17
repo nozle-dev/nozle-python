@@ -11,6 +11,7 @@ from nozle._validation import (
     require_catalog_key,
     require_non_empty,
     require_secret_key,
+    validate_idempotency_key,
 )
 from nozle.can import can as _can
 from nozle.cost_events import CostEventsNamespace
@@ -29,10 +30,12 @@ from nozle.types import (
     CanResult,
     CheckAndDeductResult,
     CheckoutResult,
+    CheckoutStatus,
     CustomerUpsertResult,
     JSONMapping,
     PingResult,
     Plan,
+    RazorpayVerification,
     SubscribeResult,
     SubscriptionTransitionParams,
     SubscriptionTransitionPreview,
@@ -128,6 +131,9 @@ class Nozle:
         return_url: Optional[str] = None,
         *,
         success_url: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        register_mandate: Optional[bool] = None,
+        external_entity_id: Optional[str] = None,
     ) -> CheckoutResult:
         operation = "checkout"
         require_secret_key(self.api_key, operation)
@@ -144,12 +150,92 @@ class Nozle:
                 DeprecationWarning,
                 stacklevel=2,
             )
-        body = {"plan_code": plan_code, "customer_id": customer_id}
+        body: dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
         if resolved_return_url:
             body["return_url"] = resolved_return_url
         return cast(
             CheckoutResult,
-            self._engine.request(operation, "POST", "/api/v1/checkout", json_body=body),
+            self._checkout_request(
+                operation,
+                body,
+                idempotency_key=idempotency_key,
+                register_mandate=register_mandate,
+                external_entity_id=external_entity_id,
+            ),
+        )
+
+    def checkout_invoice(
+        self,
+        invoice_id: str,
+        *,
+        idempotency_key: Optional[str] = None,
+        register_mandate: Optional[bool] = None,
+    ) -> CheckoutResult:
+        require_secret_key(self.api_key, "checkout_invoice")
+        require_non_empty(invoice_id, "invoice_id", "checkout_invoice")
+        return cast(
+            CheckoutResult,
+            self._checkout_request(
+                "checkout_invoice",
+                {"invoice_id": invoice_id},
+                idempotency_key=idempotency_key,
+                register_mandate=register_mandate,
+            ),
+        )
+
+    def verify_checkout(
+        self, checkout_id: str, verification: RazorpayVerification
+    ) -> CheckoutStatus:
+        operation = "verify_checkout"
+        require_secret_key(self.api_key, operation)
+        require_non_empty(checkout_id, "checkout_id", operation)
+        for field in ("razorpay_order_id", "razorpay_payment_id", "razorpay_signature"):
+            value = verification.get(field, "")
+            if not isinstance(value, str):
+                raise NozleValidationError(f"{operation} requires {field}")
+            require_non_empty(value, field, operation)
+        return cast(
+            CheckoutStatus,
+            self._engine.request(
+                operation,
+                "POST",
+                f"/api/v1/checkout/{quote(checkout_id, safe='')}/verify",
+                json_body=verification,
+            ),
+        )
+
+    def checkout_status(self, checkout_id: str) -> CheckoutStatus:
+        operation = "checkout_status"
+        require_secret_key(self.api_key, operation)
+        require_non_empty(checkout_id, "checkout_id", operation)
+        return cast(
+            CheckoutStatus,
+            self._engine.request(
+                operation, "GET", f"/api/v1/checkout/{quote(checkout_id, safe='')}"
+            ),
+        )
+
+    def _checkout_request(
+        self,
+        operation: str,
+        body: dict[str, Any],
+        *,
+        idempotency_key: Optional[str] = None,
+        register_mandate: Optional[bool] = None,
+        external_entity_id: Optional[str] = None,
+    ) -> Any:
+        headers = None
+        if idempotency_key is not None:
+            validate_idempotency_key(idempotency_key, operation)
+            headers = {"Idempotency-Key": idempotency_key}
+        if register_mandate is not None:
+            if type(register_mandate) is not bool:
+                raise NozleValidationError("register_mandate must be a boolean")
+            body["register_mandate"] = register_mandate
+        if external_entity_id is not None:
+            body["external_entity_id"] = external_entity_id
+        return self._engine.request(
+            operation, "POST", "/api/v1/checkout", json_body=body, headers=headers
         )
 
     def subscribe(self, customer_id: str, plan_code: str) -> SubscribeResult:
