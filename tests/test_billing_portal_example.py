@@ -244,6 +244,9 @@ def test_http_auth_csrf_expiry_and_private_error_redaction(tmp_path: Path) -> No
         login = browser.post(base + "/api/login", json={"token": token})
         assert login.status_code == 200
         assert "HttpOnly; SameSite=Strict" in login.headers["Set-Cookie"]
+        assert "; Secure" in login.headers["Set-Cookie"]
+        # Model the HTTPS reverse proxy forwarding its browser cookie to loopback HTTP.
+        browser.headers["Cookie"] = login.headers["Set-Cookie"].split(";", 1)[0]
         assert browser.post(base + "/api/billing/session", json={}).json() == {
             "token": "scoped-authenticated",
             "apiUrl": "http://core",

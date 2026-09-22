@@ -263,8 +263,7 @@ def merchant_handler(
                     sessions[identifier] = {"customer_id": customer_id, "expires": now() + 3600}
                     cookie = (
                         f"billing_session={identifier}; HttpOnly; SameSite=Strict;"
-                        " Path=/; Max-Age=3600"
-                        + ("; Secure" if origin.startswith("https:") else "")
+                        " Path=/; Max-Age=3600; Secure"
                     )
                     self.send_json(200, {}, cookie)
                     return
