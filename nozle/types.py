@@ -127,11 +127,14 @@ class SubscriptionPlan(TypedDict):
     interval: str
 
 
-class ManagedSubscription(TypedDict):
+class _SubscriptionIdentity(TypedDict):
     id: str
     external_id: str
     plan_code: str
     status: str
+
+
+class ManagedSubscription(_SubscriptionIdentity):
     ending_at: Optional[str]
     plan: SubscriptionPlan
 
@@ -181,7 +184,7 @@ class SubscriptionChangePreview(TypedDict):
 
 
 class WithdrawPendingSubscriptionChangeResult(TypedDict):
-    subscription: ManagedSubscription
+    subscription: _SubscriptionIdentity
     withdrawn_pending_subscription_id: str
     replayed: bool
 

@@ -1,6 +1,6 @@
 # React subscription management through the Python SDK
 
-This runnable merchant server connects `BillingPortal`'s optional cancellation controls to the existing `preview_subscription_transition` and `apply_subscription_transition` methods. The merchant authenticates the customer; Nozle Engine checks that the external subscription belongs to that customer and organization. No secret API key goes to React.
+This runnable merchant server connects `BillingPortal` to the existing subscription transitions and payment-backed checkout. Customers can cancel at period end, keep their subscription, upgrade, schedule a downgrade, and withdraw the exact pending change. The merchant authenticates the customer; Nozle Engine checks that the selected external subscription belongs to that customer and organization. No secret API key goes to React.
 
 ## Run
 
@@ -9,7 +9,7 @@ Use Python 3.9 or newer. From this repository root:
 ```sh
 python -m venv .venv
 .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -q tests/test_billing_portal_example.py tests/test_cancellation_guard.py
+.venv/bin/python -m pytest -q tests/test_billing_portal_example.py tests/test_cancellation_guard.py tests/test_plan_change_example.py tests/test_subscription_management.py
 ```
 
 Export the variables listed in `.env.example` using your shell or secret manager, then run:
@@ -27,7 +27,7 @@ The React controls and confirmation-date guard must come from the associated fea
 
 ## React adapter
 
-The JavaScript SDK repository includes a runnable React app at `examples/billing-portal/web`. Start this Python server with `MERCHANT_ORIGIN=http://localhost:5179`, build the React package in that repository, run `npm install` in the web example, then `MERCHANT_PORT=4243 npm run dev`. Open `http://localhost:5179` and sign in with your demo login token. Vite proxies `/api` to this Python integration.
+The JavaScript SDK repository includes a runnable React app at `examples/billing-portal/web`. Checkout return URLs require HTTPS. Start this Python server with `MERCHANT_ORIGIN=https://127.0.0.1:5179`. Build the React package in that repository, then run `npm install` in the web example. Export absolute `DEV_TLS_CERT` and `DEV_TLS_KEY` paths for a local development certificate (for example, generated outside the repository with `mkcert 127.0.0.1`), then run `MERCHANT_PORT=4243 npm run dev`. Open `https://127.0.0.1:5179` and sign in with the demo login token. Vite proxies `/api` to this Python integration over loopback HTTP. Cancellation-only testing can use loopback HTTP; checkout needs HTTPS.
 
 Serve React and these endpoints from the same origin, or proxy `/api` from Vite to port 4243. Set `MERCHANT_ORIGIN` to that exact browser origin. Sign in through `POST /api/login` with `{ "token": "your demo login token" }`; subsequent calls use the HttpOnly cookie. Requests require JSON and an exact `Origin` match.
 
@@ -64,7 +64,7 @@ After any apply result or timeout, the React control reads persisted customer-sc
 
 ## Handler boundaries
 
-- Browser action bodies contain only an external `subscriptionId`, `operation` (`cancel` or `uncancel`), and, on apply, `idempotencyKey` plus `expectedEffectiveAt` for cancellation. Customer IDs, refund settings, plan changes, and immediate timing are rejected.
+- Cancellation action bodies contain only an external `subscriptionId`, `operation` (`cancel` or `uncancel`), and, on apply, `idempotencyKey` plus `expectedEffectiveAt` for cancellation. Customer IDs, refund settings, plan changes, and immediate timing are rejected.
 - Cancellation always explicitly uses `end_of_period`. Keep sends `uncancel` without settlement overrides. It restores renewal while the subscription is active; it does not restart an ended subscription or restore a removed pending downgrade.
 - Core owns durable idempotency. The local action file binds the authenticated customer and confirmation to the same upstream key, remembers completed calls, and allows retries after a lost response to bypass a now-invalid fresh preview. Keep the same key for a retry. Create a new key only after a new confirmation.
 - `ACTION_STORE_PATH` defaults to `.billing-portal/actions.json` under the current directory, with private file permissions. Run from the example directory, whose `.gitignore` excludes the store. Use a transactional shared database and your app's existing authentication/session store for multiple workers. This file store and token login are for one development process, not a replacement for merchant production auth. Keep replay records for your supported retry window.
