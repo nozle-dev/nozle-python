@@ -74,7 +74,9 @@ After any apply result or timeout, the React control reads persisted customer-sc
 
 ### Access enforcement
 
-The portal changes billing state; your application must enforce entitlement checks on its server. Core currently runs subscription termination hourly at minute 05, and the Engine refreshes its entitlement cache each minute. Exact removal of access at the scheduled cancellation time therefore remains an M1 launch gate. Tests that advance the clock and invoke the Core job verify lifecycle behavior, but do not prove the timing of a deployed scheduler or cache refresh.
+The portal changes billing state; your application must enforce entitlement checks on its server. The companion Engine build checks the authoritative subscription and database clock on each `/can` request: access ends at the scheduled cancellation boundary even while Core's termination job has not updated the row, and Keep takes effect without waiting for cache refresh. A failed authoritative read returns an error rather than allowing access. Merchants must handle that error without granting access and must not add a cache that extends the scheduled cutoff.
+
+The real isolated-backend probe verified immediate Keep and denial after the boundary with two Engine instances, while the canceled Core row was still active. Core's lifecycle jobs still run on their configured schedule (termination is hourly at minute 05). Manually clocked renewal/termination tests prove lifecycle behavior; they do not prove deployed job timing, invoice execution, or exact scheduled-downgrade activation. Verify those operational dependencies in the deployment before release.
 
 Create a renewing test customer and subscription whose external IDs both start `sdk-cancel-test-`. Export `DEMO_SUBSCRIPTION_ID`, `DEMO_CUSTOMER_ID`, and the login variables used by the server, then:
 
