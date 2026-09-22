@@ -39,9 +39,12 @@ from nozle.types import (
     Plan,
     RazorpayVerification,
     SubscribeResult,
+    SubscriptionChangePreview,
+    SubscriptionOptions,
     SubscriptionTransitionParams,
     SubscriptionTransitionPreview,
     SubscriptionTransitionResult,
+    WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
 
@@ -136,6 +139,8 @@ class Nozle:
         idempotency_key: Optional[str] = None,
         register_mandate: Optional[bool] = None,
         external_entity_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+        quote_id: Optional[str] = None,
     ) -> CheckoutResult:
         operation = "checkout"
         require_secret_key(self.api_key, operation)
@@ -153,6 +158,14 @@ class Nozle:
                 stacklevel=2,
             )
         body: dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
+        if subscription_id is not None:
+            require_non_empty(subscription_id, "subscription_id", operation)
+            body["subscription_id"] = subscription_id
+        if quote_id is not None:
+            require_non_empty(quote_id, "quote_id", operation)
+            if not subscription_id:
+                raise NozleValidationError("checkout quote_id requires an explicit subscription_id")
+            body["quote_id"] = quote_id
         if resolved_return_url:
             body["return_url"] = resolved_return_url
         return cast(
@@ -186,7 +199,12 @@ class Nozle:
         )
 
     def verify_checkout(
-        self, checkout_id: str, verification: RazorpayVerification
+        self,
+        checkout_id: str,
+        verification: RazorpayVerification,
+        *,
+        customer_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
     ) -> CheckoutStatus:
         operation = "verify_checkout"
         require_secret_key(self.api_key, operation)
@@ -203,17 +221,88 @@ class Nozle:
                 "POST",
                 f"/api/v1/checkout/{quote(checkout_id, safe='')}/verify",
                 json_body=verification,
+                params=self._checkout_scope(customer_id, subscription_id),
             ),
         )
 
-    def checkout_status(self, checkout_id: str) -> CheckoutStatus:
+    def checkout_status(
+        self,
+        checkout_id: str,
+        *,
+        customer_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+    ) -> CheckoutStatus:
         operation = "checkout_status"
         require_secret_key(self.api_key, operation)
         require_non_empty(checkout_id, "checkout_id", operation)
         return cast(
             CheckoutStatus,
             self._engine.request(
-                operation, "GET", f"/api/v1/checkout/{quote(checkout_id, safe='')}"
+                operation,
+                "GET",
+                f"/api/v1/checkout/{quote(checkout_id, safe='')}",
+                params=self._checkout_scope(customer_id, subscription_id),
+            ),
+        )
+
+    def _checkout_scope(
+        self, customer_id: Optional[str], subscription_id: Optional[str]
+    ) -> Optional[dict[str, str]]:
+        if customer_id is None and subscription_id is None:
+            return None
+        require_non_empty(customer_id or "", "customer_id", "checkout scope")
+        require_non_empty(subscription_id or "", "subscription_id", "checkout scope")
+        return {"customer_id": customer_id or "", "subscription_id": subscription_id or ""}
+
+    def subscription_options(self, customer_id: str, subscription_id: str) -> SubscriptionOptions:
+        require_secret_key(self.api_key, "subscription_options")
+        return cast(
+            SubscriptionOptions,
+            self._engine.request(
+                "subscription_options",
+                "GET",
+                "/api/v1/subscriptions/options",
+                params=self._checkout_scope(customer_id, subscription_id),
+            ),
+        )
+
+    def preview_subscription_change(
+        self, customer_id: str, subscription_id: str, plan_code: str
+    ) -> SubscriptionChangePreview:
+        require_secret_key(self.api_key, "preview_subscription_change")
+        scope = self._checkout_scope(customer_id, subscription_id) or {}
+        require_non_empty(plan_code, "plan_code", "preview_subscription_change")
+        return cast(
+            SubscriptionChangePreview,
+            self._engine.request(
+                "preview_subscription_change",
+                "POST",
+                "/api/v1/subscriptions/preview",
+                json_body={**scope, "plan_code": plan_code},
+            ),
+        )
+
+    def withdraw_pending_subscription_change(
+        self,
+        customer_id: str,
+        subscription_id: str,
+        pending_subscription_id: str,
+        *,
+        idempotency_key: str,
+    ) -> WithdrawPendingSubscriptionChangeResult:
+        operation = "withdraw_pending_subscription_change"
+        require_secret_key(self.api_key, operation)
+        scope = self._checkout_scope(customer_id, subscription_id) or {}
+        require_non_empty(pending_subscription_id, "pending_subscription_id", operation)
+        validate_idempotency_key(idempotency_key, operation)
+        return cast(
+            WithdrawPendingSubscriptionChangeResult,
+            self._engine.request(
+                operation,
+                "POST",
+                "/api/v1/subscriptions/transitions/withdraw",
+                json_body={**scope, "pending_subscription_id": pending_subscription_id},
+                headers={"Idempotency-Key": idempotency_key},
             ),
         )
 
@@ -343,6 +432,11 @@ class Nozle:
         refund_mode = params.get("refund_mode")
         final_invoice_action = params.get("final_invoice_action")
         expected_effective_at = params.get("expected_effective_at")
+        quote_id = params.get("quote_id")
+        if quote_id is not None:
+            require_non_empty(quote_id, "quote_id", operation_name)
+            if transition_operation != "downgrade":
+                raise NozleValidationError("quote_id requires a downgrade transition")
         if expected_effective_at is not None:
             if transition_operation != "cancel" or timing != "end_of_period":
                 raise NozleValidationError(
@@ -419,6 +513,7 @@ class Nozle:
             "refund_mode": refund_mode,
             "final_invoice_action": final_invoice_action,
             "expected_effective_at": expected_effective_at,
+            "quote_id": quote_id,
         }
         payload.update({key: value for key, value in optional_values.items() if value is not None})
         return payload

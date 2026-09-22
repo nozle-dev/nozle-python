@@ -71,6 +71,9 @@ class _StripeCheckoutRequired(TypedDict):
 
 
 class StripeCheckoutResult(_StripeCheckoutRequired, total=False):
+    publishable_key: str
+    stripe_account: str
+    checkout_id: str
     client_secret: str
     clientSecret: str
     url: str
@@ -87,6 +90,11 @@ class _CompletedCheckoutRequired(TypedDict):
 
 
 class CompletedCheckoutResult(_CompletedCheckoutRequired, total=False):
+    checkout_id: str
+    effective_at: str
+    renewal_at: Optional[str]
+    amount_due_cents: Union[int, str]
+    currency: str
     subscription_id: str
     plan_code: str
     external_entity_id: str
@@ -99,10 +107,83 @@ class _ScheduledCheckoutRequired(TypedDict):
 
 
 class ScheduledCheckoutResult(_ScheduledCheckoutRequired, total=False):
+    pending_subscription_id: str
     subscription_id: str
     plan_code: str
     external_entity_id: str
     external_subscription_id: str
+    checkout_id: str
+    effective_at: str
+    renewal_at: Optional[str]
+    amount_due_cents: Union[int, str]
+    currency: str
+
+
+class SubscriptionPlan(TypedDict):
+    code: str
+    name: str
+    amount_cents: Union[int, str]
+    currency: str
+    interval: str
+
+
+class ManagedSubscription(TypedDict):
+    id: str
+    external_id: str
+    plan_code: str
+    status: str
+    ending_at: Optional[str]
+    plan: SubscriptionPlan
+
+
+class PendingSubscriptionChange(TypedDict):
+    id: str
+    plan_code: str
+    name: str
+    effective_at: str
+    plan: SubscriptionPlan
+
+
+class EligibleSubscriptionPlan(SubscriptionPlan):
+    direction: Literal["upgrade", "downgrade"]
+    timing: Literal["immediate", "end_of_period"]
+
+
+class SubscriptionCheckoutSummary(TypedDict):
+    id: str
+    status: str
+    plan_code: str
+
+
+class _SubscriptionOptionsRequired(TypedDict):
+    subscription: ManagedSubscription
+    pending_change: Optional[PendingSubscriptionChange]
+    eligible_plans: List[EligibleSubscriptionPlan]
+
+
+class SubscriptionOptions(_SubscriptionOptionsRequired, total=False):
+    checkout: Optional[SubscriptionCheckoutSummary]
+    blocked_reason: Optional[str]
+
+
+class SubscriptionChangePreview(TypedDict):
+    quote_id: str
+    currency: str
+    credit_amount_cents: Union[int, str]
+    debit_amount_cents: Union[int, str]
+    net_amount_cents: Union[int, str]
+    amount_due_now_cents: Union[int, str]
+    amount_due_at_effective_cents: Union[int, str]
+    transition_direction: Literal["upgrade", "downgrade"]
+    timing: Literal["immediate", "end_of_period"]
+    effective_at: str
+    renewal_at: Optional[str]
+
+
+class WithdrawPendingSubscriptionChangeResult(TypedDict):
+    subscription: ManagedSubscription
+    withdrawn_pending_subscription_id: str
+    replayed: bool
 
 
 class _RazorpayCheckoutRequired(TypedDict):
@@ -151,7 +232,7 @@ CheckoutResult = Union[
 
 class _CheckoutStatusRequired(TypedDict):
     checkout_id: str
-    provider: Literal["razorpay"]
+    provider: Literal["razorpay", "stripe"]
     status: Literal[
         "processing", "awaiting_payment", "succeeded", "failed", "expired", "needs_review"
     ]
@@ -272,6 +353,7 @@ class SubscriptionTransitionParams(TypedDict, total=False):
     refund_mode: SubscriptionTransitionRefundMode
     final_invoice_action: SubscriptionTransitionFinalInvoiceAction
     expected_effective_at: str
+    quote_id: str
 
 
 class SubscriptionTransitionPreviewBody(TypedDict, total=False):

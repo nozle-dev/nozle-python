@@ -1,4 +1,4 @@
-# React cancellation through the Python SDK
+# React subscription management through the Python SDK
 
 This runnable merchant server connects `BillingPortal`'s optional cancellation controls to the existing `preview_subscription_transition` and `apply_subscription_transition` methods. The merchant authenticates the customer; Nozle Engine checks that the external subscription belongs to that customer and organization. No secret API key goes to React.
 
@@ -85,3 +85,29 @@ MERCHANT_URL=http://localhost:4243 ../../.venv/bin/python verify.py
 The verifier authenticates, checks tampering and stale-date rejection, cancels and replays, verifies persisted period-end cancellation, keeps and replays, and verifies the original active plan is renewing. It restores only its explicitly named test fixture. It refuses the protected billing-lab customer. The same driver can target the Node merchant server by changing `MERCHANT_URL` and `MERCHANT_ORIGIN`.
 
 For package verification, build with `python -m build`, install the wheel into an empty virtual environment, copy `examples/billing_portal` and the example tests outside the repository, and run them with that environment. The tests include the actual SDK wire request and nested response contract in addition to authentication, conflict, and retry cases. Live lifecycle/renewal evidence comes from the isolated backend tests, not these mocked transport checks.
+
+## Upgrade, downgrade and checkout recovery
+
+The same authenticated server now implements `planChangeActions`. Load and status return the selected subscription's current plan, pending plan, eligible policy-defined targets, and persisted checkout state. Preview returns backend amounts as exact minor-unit values, currency, dates, and an opaque signed quote. Apply passes that quote and an idempotency key to payment-backed checkout for upgrades, or the existing end-of-period downgrade transition. Withdrawal targets the precise pending subscription UUID and does not cancel the active plan.
+
+```tsx
+import type { PlanChangeActions } from '@nozle-js/react';
+const planChangeActions: PlanChangeActions = {
+  load: ({signal, ...body}) => post('/api/billing/plans/load', body, signal),
+  status: ({signal, ...body}) => post('/api/billing/plans/status', body, signal),
+  preview: ({signal, ...body}) => post('/api/billing/plans/preview', body, signal),
+  apply: ({signal, ...body}) => post('/api/billing/plans/apply', body, signal),
+  withdraw: ({signal, ...body}) => post('/api/billing/plans/withdraw', body, signal),
+  verifyCheckout: ({signal, ...body}) => post('/api/billing/plans/checkout-verify', body, signal),
+  getCheckoutStatus: ({signal, ...body}) => post('/api/billing/plans/checkout-status', body, signal),
+};
+// Add planChangeActions={planChangeActions} beside cancellationActions on BillingPortal.
+```
+
+The corresponding Python methods are `subscription_options(customer_id, subscription_id)`, `preview_subscription_change(customer_id, subscription_id, plan_code)`, `checkout(customer_id, plan_code, return_url, subscription_id=…, quote_id=…, idempotency_key=…)`, and `withdraw_pending_subscription_change(customer_id, subscription_id, pending_subscription_id, idempotency_key=…)`. `checkout_status` and `verify_checkout` accept optional `customer_id` and `subscription_id` keyword scope; the merchant always supplies it for customer checkout recovery and verification. Existing calls remain compatible.
+
+A return URL must use `MERCHANT_ORIGIN`; browsers cannot select another customer or override immediate/refund/settlement behavior. The server restricts new changes while cancellation, a pending plan, or unresolved payment is present. A payment form opening or a provider callback is not proof of activation: React reloads the authoritative state and displays processing/failure until the selected plan actually changes. The private replay store now also holds scoped checkout results; keep its private permissions and replace it with your application's transactional store for production workers.
+
+For embedded Stripe, configure `STRIPE_PUBLISHABLE_KEY` with the matching Stripe `pk_test_…` or `pk_live_…` public key when Core does not include one. Hosted checkout URLs remain preferred when returned. Never put a Stripe secret key in this variable. Razorpay uses its scoped checkout's public key plus authenticated verification/status callbacks. Live provider payment verification is separate from local transport tests and zero-due demos.
+
+To run the real service zero-due upgrade/downgrade/withdrawal scenario, configure a second dedicated subscription in `DEMO_OTHER_SUBSCRIPTION_ID` and a policy-enabled zero-due upgrade target in `DEMO_UPGRADE_PLAN_CODE`, alongside the existing fixture/login variables. Run the JavaScript SDK repository’s `examples/billing-portal/verify-plan-changes.mjs` using Node with `MERCHANT_URL` set to this Python server; it refuses non-test fixture IDs and any upgrade amount due now above zero, proves the other subscription stays unchanged, and leaves the selected fixture active on the upgrade plan with no pending change. Provider-paid flows should be exercised through the included React demo with sandbox credentials.

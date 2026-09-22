@@ -8,19 +8,27 @@ import json
 import os
 import re
 import secrets
+import sys
 import threading
 import time
 from datetime import datetime
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 from urllib.parse import quote, unquote, urlsplit
 
 import requests
 
 from nozle import Nozle
 from nozle.errors import NozleAPIError
+
+# Direct execution keeps the installed SDK import intact; only this example's sibling is added.
+if __package__:
+    from .plan_changes import PlanError, PlanService
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from plan_changes import PlanError, PlanService  # type: ignore[import-not-found,no-redef]
 
 
 class HttpError(Exception):
@@ -90,12 +98,17 @@ class BillingService:
         sdk: Any,
         store: ActionStore,
         create_portal_session: Callable[[str], dict[str, Any]],
+        return_origin: str = "http://localhost:4243",
+        stripe_publishable_key: Optional[str] = None,
     ) -> None:
         self.sdk = sdk
         self.store = store
         self.create_portal_session = create_portal_session
+        self.plans = PlanService(sdk, store, return_origin, stripe_publishable_key)
 
     def dispatch(self, customer_id: str, path: str, body: Any) -> dict[str, Any]:
+        if path.startswith("/api/billing/plans/"):
+            return dict(self.plans.dispatch(customer_id, path, body))
         if path == "/api/billing/session":
             fields(body, set())
             return self.create_portal_session(customer_id)
@@ -231,7 +244,7 @@ def merchant_handler(
                     length = int(self.headers.get("Content-Length", "0"))
                 except ValueError:
                     raise HttpError(400, "Invalid request length.") from None
-                if length < 0 or length > 4096:
+                if length < 0 or length > 32768:
                     raise HttpError(413, "Request too large.")
                 try:
                     body = json.loads(self.rfile.read(length))
@@ -262,7 +275,7 @@ def merchant_handler(
                 if not session or session["expires"] <= now():
                     raise HttpError(401, "Sign in again.")
                 self.send_json(200, dispatch(session["customer_id"], self.path, body))
-            except HttpError as error:
+            except (HttpError, PlanError) as error:
                 self.send_json(error.status, {"error": str(error)})
             except Exception:
                 self.send_json(502, {"error": "Billing request failed. Refresh before retrying."})
@@ -282,6 +295,8 @@ if __name__ == "__main__":
             core_url,
             os.environ.get("NOZLE_PORTAL_API_URL") or core_url,
         ),
+        return_origin=os.environ.get("MERCHANT_ORIGIN", "http://localhost:4243"),
+        stripe_publishable_key=os.environ.get("STRIPE_PUBLISHABLE_KEY"),
     )
     handler = merchant_handler(
         origin=os.environ.get("MERCHANT_ORIGIN", "http://localhost:4243"),
