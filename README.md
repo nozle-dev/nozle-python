@@ -361,3 +361,7 @@ response once ready. Reuse your idempotency key when retrying creation.
 
 Razorpay support is INR-only. UPI AutoPay requires merchant enablement and explicit
 customer authorization; one-time card or UPI payments do not create a mandate.
+
+## React billing portal cancellation example
+
+See the [runnable authenticated merchant integration](examples/billing_portal/README.md) for Cancel and Keep through the React billing portal. It reuses the existing transition methods and derives customer identity from the merchant session. For end-of-period cancellation, optional `expected_effective_at` preserves the exact preview timestamp and rejects a changed date atomically on compatible Engine/Core deployments. Existing calls without this option remain compatible.

@@ -271,6 +271,7 @@ class SubscriptionTransitionParams(TypedDict, total=False):
     credit_action: SubscriptionTransitionCreditAction
     refund_mode: SubscriptionTransitionRefundMode
     final_invoice_action: SubscriptionTransitionFinalInvoiceAction
+    expected_effective_at: str
 
 
 class SubscriptionTransitionPreviewBody(TypedDict, total=False):

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import warnings
+from datetime import datetime
 from typing import Any, Mapping, Optional, Union, cast
 from urllib.parse import quote
 
@@ -340,6 +342,22 @@ class Nozle:
         credit_action = params.get("credit_action")
         refund_mode = params.get("refund_mode")
         final_invoice_action = params.get("final_invoice_action")
+        expected_effective_at = params.get("expected_effective_at")
+        if expected_effective_at is not None:
+            if transition_operation != "cancel" or timing != "end_of_period":
+                raise NozleValidationError(
+                    "expected_effective_at requires end_of_period cancellation"
+                )
+            try:
+                if not isinstance(expected_effective_at, str) or not re.fullmatch(
+                    r"\d{4}-\d\d-\d\dT.+(?:Z|[+-]\d\d:\d\d)", expected_effective_at
+                ):
+                    raise ValueError
+                datetime.fromisoformat(expected_effective_at.replace("Z", "+00:00"))
+            except ValueError:
+                raise NozleValidationError(
+                    "expected_effective_at requires an ISO timestamp with timezone"
+                ) from None
         if transition_operation not in ("cancel", "downgrade", "uncancel"):
             raise NozleValidationError("operation must be 'cancel', 'downgrade', or 'uncancel'")
         if timing is not None and timing not in ("end_of_period", "immediate"):
@@ -400,6 +418,7 @@ class Nozle:
             "credit_action": credit_action,
             "refund_mode": refund_mode,
             "final_invoice_action": final_invoice_action,
+            "expected_effective_at": expected_effective_at,
         }
         payload.update({key: value for key, value in optional_values.items() if value is not None})
         return payload

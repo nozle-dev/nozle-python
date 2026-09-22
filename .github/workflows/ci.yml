@@ -33,9 +33,9 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -e ".[dev]"
-      - run: ruff format --check nozle tests
-      - run: ruff check nozle tests
-      - run: mypy nozle
+      - run: ruff format --check nozle tests examples/billing_portal
+      - run: ruff check nozle tests examples/billing_portal
+      - run: mypy nozle examples/billing_portal
 
   package:
     runs-on: [self-hosted, Linux, X64, nozle-ci]
