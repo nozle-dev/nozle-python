@@ -365,3 +365,11 @@ customer authorization; one-time card or UPI payments do not create a mandate.
 ## React billing portal subscription management
 
 See the [runnable authenticated merchant integration](examples/billing_portal/README.md) for Cancel, Keep, payment-backed upgrades, scheduled downgrades, and exact pending-change withdrawal through the React billing portal. It reuses the existing transition methods and derives customer identity from the merchant session. For end-of-period cancellation, optional `expected_effective_at` preserves the exact preview timestamp and rejects a changed date atomically on compatible Engine/Core deployments. Existing calls without this option remain compatible.
+
+
+Version `0.9.0` adds `subscription_options(customer_id, subscription_id)`,
+`preview_subscription_change(customer_id, subscription_id, plan_code)`, and
+`withdraw_pending_subscription_change(customer_id, subscription_id, pending_subscription_id, idempotency_key=...)`.
+Use the existing checkout/transition methods with the selected subscription, signed quote,
+and a stable action key. Scope `checkout_status` and `verify_checkout` with both
+`customer_id` and `subscription_id`. See the [method examples](https://docs.nozle.dev/sdks/python/billing#subscription-self-service).
