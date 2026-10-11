@@ -1,11 +1,46 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from nozle._transport import HttpTransport
 from nozle._validation import require_non_empty, require_secret_key
+from nozle.errors import NozleValidationError
 from nozle.identifiers import create_transaction_id
 from nozle.types import JSONMapping
+
+_RFC3339 = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+)
+
+
+def _event_timestamp(value: str) -> str:
+    if not isinstance(value, str):
+        raise NozleValidationError("track timestamp must be RFC3339 or Unix seconds")
+    try:
+        seconds = Decimal(value)
+    except InvalidOperation:
+        seconds = None
+    if seconds is not None and seconds.is_finite() and seconds >= 0:
+        return value
+    if _RFC3339.fullmatch(value) is None:
+        raise NozleValidationError("track timestamp must be RFC3339 or Unix seconds")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise NozleValidationError("track timestamp must be RFC3339 or Unix seconds") from error
+    if parsed.tzinfo is None:
+        raise NozleValidationError("track timestamp must be RFC3339 or Unix seconds")
+    elapsed = parsed.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)
+    milliseconds = (
+        elapsed.days * 86_400_000 + elapsed.seconds * 1_000 + elapsed.microseconds // 1_000
+    )
+    if milliseconds < 0:
+        raise NozleValidationError("track timestamp must be RFC3339 or Unix seconds")
+    return f"{milliseconds // 1_000}.{milliseconds % 1_000:03d}"
 
 
 def track(
@@ -34,7 +69,7 @@ def track(
         body["external_subscription_id"] = subscription_id
 
     if timestamp:
-        body["timestamp"] = timestamp
+        body["timestamp"] = _event_timestamp(timestamp)
 
     transport.request(
         operation,
