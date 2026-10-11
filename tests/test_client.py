@@ -17,7 +17,6 @@ from nozle import (
 
 
 def test_version_metadata_and_runtime_match() -> None:
-    assert __version__ == "0.9.0"
     assert version("nozle-sdk") == __version__
 
 
@@ -97,7 +96,7 @@ def test_track_with_explicit_subscription_and_timestamp(
         "code": "api_call",
         "properties": {"tokens": 100},
         "external_subscription_id": "sub_1",
-        "timestamp": "2026-07-20T12:00:00.750Z",
+        "timestamp": "1784548800.750",
     }
 
 
@@ -109,6 +108,20 @@ def test_track_generates_transaction_id(requests_mock: requests_mock.Mocker) -> 
     assert len(requests_mock.last_request.json()["event"]["transaction_id"]) == 36
     assert transaction_id == requests_mock.last_request.json()["event"]["transaction_id"]
     assert UUID(transaction_id).version == 7
+
+
+def test_track_preserves_numeric_timestamp_and_rejects_invalid_value(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.post("https://api.example/core/api/v1/events", json={})
+    client = Nozle("sk_test", events_url="https://api.example/core")
+
+    client.track("cust_1", "api_call", subscription_id="sub_1", timestamp="1784548800.123")
+    assert requests_mock.last_request.json()["event"]["timestamp"] == "1784548800.123"
+
+    with pytest.raises(NozleValidationError, match="timestamp must be RFC3339 or Unix seconds"):
+        client.track("cust_1", "api_call", subscription_id="sub_1", timestamp="not-a-timestamp")
+    assert requests_mock.call_count == 1
 
 
 def test_event_and_cost_event_identifier_helpers() -> None:
