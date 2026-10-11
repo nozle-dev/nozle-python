@@ -6,10 +6,12 @@ ledger usage, margin intelligence, and LLM usage capture.
 ## Install
 
 ```bash
-pip install nozle-sdk
+pip install nozle-sdk==0.9.1
 ```
 
 Python 3.9 through 3.13 are supported. The package is typed and includes `py.typed`.
+
+Version `0.9.1` converts RFC 3339 Feature Event timestamps to the Unix-second format Core accepts, including events created by the OpenAI and Anthropic wrappers. See the [changelog](CHANGELOG.md).
 
 ## Authentication
 
