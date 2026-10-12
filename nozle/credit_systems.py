@@ -54,7 +54,6 @@ class CreditSystemsNamespace:
 
 def _normalize_credit_system(system: Mapping[str, Any]) -> CreditSystem:
     operation = "credit_systems.list"
-    system = {**system, "nozle_id": system.get("nozle_id", system.get("lago_id"))}  # lago_id: old servers
     required = ("nozle_id", "code", "name", "unit_name", "status", "created_at", "updated_at")
     if any(not isinstance(system.get(field), str) for field in required):
         raise NozleAPIError(operation, 200, "credit system response was incomplete")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import requests_mock
 
-from nozle import Nozle, NozleAuthenticationError, NozleValidationError
+from nozle import Nozle, NozleAPIError, NozleAuthenticationError, NozleValidationError
 
 ANY_URL = requests_mock.ANY
 
@@ -104,6 +104,17 @@ def test_credit_systems_list_paginates_every_active_core_page(
         "updated_at": "2026-07-20T12:00:00Z",
     }
     assert first.call_count == second.call_count == 1
+
+
+def test_credit_systems_list_rejects_response_missing_nozle_id(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    system = core_credit_system("system-1", "ai")
+    del system["nozle_id"]
+    requests_mock.get(ANY_URL, json={"credit_systems": [system], "meta": {"next_page": None}})
+
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test", events_url="https://api.example/core").credit_systems.list()
 
 
 def test_customer_credit_reads_escape_identifiers_and_preserve_exact_values(
