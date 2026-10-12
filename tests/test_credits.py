@@ -10,7 +10,7 @@ ANY_URL = requests_mock.ANY
 
 def core_credit_system(system_id: str, code: str) -> dict[str, object]:
     return {
-        "lago_id": system_id,
+        "nozle_id": system_id,
         "code": code,
         "name": code.upper(),
         "description": None,
