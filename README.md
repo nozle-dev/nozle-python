@@ -57,7 +57,7 @@ Checkout can return any production transition shape:
 
 - `{"type": "stripe", "client_secret": "cs_..."}`: Stripe embedded Checkout Session
 - `{"type": "razorpay", "key_id": "...", "order_id": "..."}`: Razorpay order for the modal
-- `{"type": "hosted", "payment_url": "https://..."}`: Razorpay payment link
+- `{"type": "hosted", "payment_url": "https://..."}`: declared in the result types; `POST /checkout` does not return it for Razorpay (invoice payment URLs and credit top-ups return a `payment_url` with no checkout id to poll)
 - `{"type": "processing", "checkout_id": "...", "status": "..."}`: Razorpay order not ready, or a Stripe quoted upgrade replayed while its webhook is pending
 - `{"type": "completed", "status": "..."}`
 - `{"type": "scheduled", "status": "..."}`
@@ -351,7 +351,7 @@ what to do next. Branch on `type`; a browser callback alone never proves payment
 | --- | --- | --- |
 | `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
-| `hosted` | Razorpay | Redirect the customer to `payment_url` (a payment link) |
+| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
 | `processing` | Razorpay or Stripe | Recover with `checkout_status(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now: credits covered it, or the change takes effect later |
 
