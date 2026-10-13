@@ -39,3 +39,28 @@ class NozleAPIError(NozleError):
         if response_details not in (None, "", {}):
             detail = f": {response_details!r}"
         super().__init__(f"{operation} failed with HTTP {status_code}{detail}")
+
+    @property
+    def code(self) -> Optional[str]:
+        """Top-level error code, for example ``payment_provider_required``."""
+        details = self.response_details
+        value = details.get("code") if isinstance(details, dict) else None
+        return value if isinstance(value, str) else None
+
+    def has_code(self, code: str) -> bool:
+        """True when ``code`` is the top-level code or is listed in ``error_details``.
+
+        A 422 ``validation_errors`` response lists specific codes, such as
+        ``razorpay_requires_inr`` or ``invalid_checkout_signature``, under
+        ``error_details``.
+        """
+        if self.code == code:
+            return True
+        details = self.response_details
+        listed = details.get("error_details") if isinstance(details, dict) else None
+        if not isinstance(listed, dict):
+            return False
+        return any(
+            value == code or (isinstance(value, list) and code in value)
+            for value in listed.values()
+        )

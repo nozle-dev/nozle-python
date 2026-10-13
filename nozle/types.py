@@ -71,6 +71,8 @@ class _StripeCheckoutRequired(TypedDict):
 
 
 class StripeCheckoutResult(_StripeCheckoutRequired, total=False):
+    # Nozle never returns publishable_key, stripe_account or url: use your own Stripe
+    # publishable key and mount the embedded Checkout Session client_secret.
     publishable_key: str
     stripe_account: str
     checkout_id: str
@@ -78,6 +80,7 @@ class StripeCheckoutResult(_StripeCheckoutRequired, total=False):
     clientSecret: str
     url: str
     invoice_id: str
+    plan_upgrade_intent_id: str
     amount_cents: int
     currency: str
     external_entity_id: str
@@ -95,6 +98,9 @@ class CompletedCheckoutResult(_CompletedCheckoutRequired, total=False):
     renewal_at: Optional[str]
     amount_due_cents: Union[int, str]
     currency: str
+    payment_source: str
+    invoice_id: str
+    amount_cents: int
     subscription_id: str
     plan_code: str
     external_entity_id: str
@@ -107,7 +113,10 @@ class _ScheduledCheckoutRequired(TypedDict):
 
 
 class ScheduledCheckoutResult(_ScheduledCheckoutRequired, total=False):
+    # Deprecated: never returned. The pending subscription ID is subscription_id.
     pending_subscription_id: str
+    transition_direction: str
+    transition_policy: str
     subscription_id: str
     plan_code: str
     external_entity_id: str
@@ -200,21 +209,43 @@ class _RazorpayCheckoutRequired(TypedDict):
 
 class RazorpayCheckoutResult(_RazorpayCheckoutRequired, total=False):
     invoice_id: str
+    plan_upgrade_intent_id: str
+    external_entity_id: str
+    external_subscription_id: str
     expires_at: str
     customer_id: str
     recurring: bool
     mandate_max_amount_cents: int
 
 
-class ProcessingCheckoutResult(TypedDict):
+class _ProcessingCheckoutRequired(TypedDict):
     type: Literal["processing"]
     checkout_id: str
     status: str
 
 
-class HostedCheckoutResult(TypedDict):
+class ProcessingCheckoutResult(_ProcessingCheckoutRequired, total=False):
+    amount_cents: int
+    currency: str
+    expires_at: str
+    invoice_id: str
+    plan_upgrade_intent_id: str
+
+
+class _HostedCheckoutRequired(TypedDict):
     type: Literal["hosted"]
     payment_url: str
+
+
+class HostedCheckoutResult(_HostedCheckoutRequired, total=False):
+    """A Razorpay payment link: redirect the customer to payment_url."""
+
+    checkout_id: str
+    amount_cents: int
+    currency: str
+    expires_at: str
+    invoice_id: str
+    plan_upgrade_intent_id: str
 
 
 class RazorpayVerification(TypedDict):
