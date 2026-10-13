@@ -339,12 +339,25 @@ def test_subscribe_ping_customer_and_check_and_deduct_contracts(
     assert customer_request.last_request.json() == {
         "customer": {"external_id": "cust_1", "name": "Acme"}
     }
-    assert client.check_and_deduct("cust_1", "completion", 5)["remaining"] == 95
-    assert requests_mock.last_request.json() == {
-        "customer_id": "cust_1",
-        "feature": "completion",
-        "credits": 5,
-    }
+    assert client.check_and_deduct("cust_1", credits=5)["remaining"] == 95
+    assert requests_mock.last_request.json() == {"customer_id": "cust_1", "credits": 5}
+    # Old callers still pass a feature: it is accepted but never sent.
+    for call in (
+        lambda: client.check_and_deduct("cust_1", "completion", 5),
+        lambda: client.check_and_deduct("cust_1", feature="completion", credits=5),
+        lambda: client.check_and_deduct("cust_1", 5),
+    ):
+        assert call()["remaining"] == 95
+        assert requests_mock.last_request.json() == {"customer_id": "cust_1", "credits": 5}
+
+
+@pytest.mark.parametrize("args", [(), ("completion",), (None, None), ("completion", True)])
+def test_check_and_deduct_requires_credits(args: tuple) -> None:
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    with requests_mock.Mocker() as m:
+        with pytest.raises(NozleValidationError, match="requires credits"):
+            client.check_and_deduct("cust_1", *args)
+        assert m.request_history == []
 
 
 def test_customer_upsert_never_uses_engine(
@@ -363,6 +376,69 @@ def test_customer_upsert_never_uses_engine(
     assert client.customers.upsert("cust_1")["external_id"] == "cust_1"
     assert core.called_once
     assert all("engine.example" not in request.url for request in requests_mock.request_history)
+
+
+@pytest.mark.parametrize(
+    ("method", "http", "path", "call"),
+    [
+        ("subscribe", "post", "/engine/api/v1/subscribe", lambda c: c.subscribe("cust_1", "pro")),
+        (
+            "checkout",
+            "post",
+            "/engine/api/v1/checkout",
+            lambda c: c.checkout("cust_1", "pro", "https://app.example/done"),
+        ),
+        (
+            "cancel_subscription",
+            "delete",
+            "/engine/api/v1/subscriptions/sub_old",
+            lambda c: c.cancel_subscription("cust_1", "sub_old"),
+        ),
+        (
+            "apply_subscription_transition",
+            "post",
+            "/engine/api/v1/subscriptions/transitions",
+            lambda c: c.apply_subscription_transition(
+                {
+                    "customer_id": "cust_1",
+                    "subscription_id": "sub_old",
+                    "operation": "cancel",
+                    "timing": "immediate",
+                },
+                idempotency_key="k1",
+            ),
+        ),
+    ],
+)
+def test_subscription_changing_calls_refresh_the_cached_subscription(
+    requests_mock: requests_mock.Mocker,
+    method: str,
+    http: str,
+    path: str,
+    call: Callable[[Nozle], object],
+) -> None:
+    lookup = requests_mock.get(
+        "https://api.example/core/api/v1/subscriptions",
+        [
+            {"json": {"subscriptions": [{"external_id": "sub_old"}]}},
+            {"json": {"subscriptions": [{"external_id": "sub_new"}]}},
+        ],
+    )
+    events = requests_mock.post("https://api.example/core/api/v1/events", json={})
+    getattr(requests_mock, http)("https://api.example" + path, json={})
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
+
+    client.track("cust_1", "event_1")
+    call(client)
+    client.track("cust_1", "event_2")
+
+    assert lookup.call_count == 2, method
+    assert [r.json()["event"]["external_subscription_id"] for r in events.request_history] == [
+        "sub_old",
+        "sub_new",
+    ]
 
 
 def test_cancel_subscription_defaults_to_end_of_period(
@@ -537,7 +613,7 @@ def test_margin_routes_and_trend_query(requests_mock: requests_mock.Mocker) -> N
         lambda client: client.checkout("c", "p"),
         lambda client: client.subscribe("c", "p"),
         lambda client: client.ping(),
-        lambda client: client.check_and_deduct("c", "f", 1),
+        lambda client: client.check_and_deduct("c", credits=1),
         lambda client: client.customers.upsert("c"),
         lambda client: client.margin.summary(),
         lambda client: client.credit_systems.list(),

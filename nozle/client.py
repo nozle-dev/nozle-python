@@ -168,16 +168,19 @@ class Nozle:
             body["quote_id"] = quote_id
         if resolved_return_url:
             body["return_url"] = resolved_return_url
-        return cast(
-            CheckoutResult,
-            self._checkout_request(
-                operation,
-                body,
-                idempotency_key=idempotency_key,
-                register_mandate=register_mandate,
-                external_entity_id=external_entity_id,
-            ),
-        )
+        try:
+            return cast(
+                CheckoutResult,
+                self._checkout_request(
+                    operation,
+                    body,
+                    idempotency_key=idempotency_key,
+                    register_mandate=register_mandate,
+                    external_entity_id=external_entity_id,
+                ),
+            )
+        finally:
+            self._sub_cache.pop(customer_id, None)  # the active subscription may have changed
 
     def checkout_invoice(
         self,
@@ -334,15 +337,18 @@ class Nozle:
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
         require_non_empty(plan_code, "plan_code", operation)
-        return cast(
-            SubscribeResult,
-            self._engine.request(
-                operation,
-                "POST",
-                "/api/v1/subscribe",
-                json_body={"plan_code": plan_code, "customer_id": customer_id},
-            ),
-        )
+        try:
+            return cast(
+                SubscribeResult,
+                self._engine.request(
+                    operation,
+                    "POST",
+                    "/api/v1/subscribe",
+                    json_body={"plan_code": plan_code, "customer_id": customer_id},
+                ),
+            )
+        finally:
+            self._sub_cache.pop(customer_id, None)
 
     def cancel_subscription(
         self,
@@ -359,18 +365,21 @@ class Nozle:
                 "cancel_subscription policy must be 'end_of_period' or 'immediate'"
             )
 
-        return cast(
-            CancelSubscriptionResult,
-            self._engine.request(
-                operation,
-                "DELETE",
-                f"/api/v1/subscriptions/{quote(subscription_id, safe='')}",
-                params={
-                    "customer_id": customer_id,
-                    "cancellation_policy": policy,
-                },
-            ),
-        )
+        try:
+            return cast(
+                CancelSubscriptionResult,
+                self._engine.request(
+                    operation,
+                    "DELETE",
+                    f"/api/v1/subscriptions/{quote(subscription_id, safe='')}",
+                    params={
+                        "customer_id": customer_id,
+                        "cancellation_policy": policy,
+                    },
+                ),
+            )
+        finally:
+            self._sub_cache.pop(customer_id, None)
 
     def preview_subscription_transition(
         self,
@@ -401,16 +410,19 @@ class Nozle:
             raise NozleValidationError(
                 "apply_subscription_transition idempotency_key must not exceed 255 bytes"
             )
-        return cast(
-            SubscriptionTransitionResult,
-            self._engine.request(
-                operation,
-                "POST",
-                "/api/v1/subscriptions/transitions",
-                json_body=body,
-                headers={"Idempotency-Key": idempotency_key},
-            ),
-        )
+        try:
+            return cast(
+                SubscriptionTransitionResult,
+                self._engine.request(
+                    operation,
+                    "POST",
+                    "/api/v1/subscriptions/transitions",
+                    json_body=body,
+                    headers={"Idempotency-Key": idempotency_key},
+                ),
+            )
+        finally:
+            self._sub_cache.pop(str(body["customer_id"]), None)
 
     def _subscription_transition_body(
         self,
@@ -525,24 +537,30 @@ class Nozle:
     def check_and_deduct(
         self,
         customer_id: str,
-        feature: str,
-        credits: Union[int, float],
+        feature: Union[str, int, float, None] = None,
+        credits: Union[int, float, None] = None,
     ) -> CheckAndDeductResult:
+        """Deduct credits from the customer's wallet (legacy wallet adapter).
+
+        Call it as ``check_and_deduct(customer_id, credits=5)``. ``feature`` is
+        deprecated and ignored: it is not sent, so old calls such as
+        ``check_and_deduct(customer_id, "completion", 5)`` keep working.
+        """
         operation = "check_and_deduct"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
-        require_non_empty(feature, "feature", operation)
+        # check_and_deduct("c", 5): the number is the credits, not a feature name.
+        if credits is None and isinstance(feature, (int, float)) and not isinstance(feature, bool):
+            credits = feature
+        if credits is None or isinstance(credits, bool) or not isinstance(credits, (int, float)):
+            raise NozleValidationError(f"{operation} requires credits")
         return cast(
             CheckAndDeductResult,
             self._engine.request(
                 operation,
                 "POST",
                 "/api/v1/check-and-deduct",
-                json_body={
-                    "customer_id": customer_id,
-                    "feature": feature,
-                    "credits": credits,
-                },
+                json_body={"customer_id": customer_id, "credits": credits},
             ),
         )
 

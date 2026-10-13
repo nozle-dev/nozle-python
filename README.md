@@ -6,7 +6,7 @@ ledger usage, margin intelligence, and LLM usage capture.
 ## Install
 
 ```bash
-pip install nozle-sdk==0.9.1
+pip install nozle-sdk==0.10.0
 ```
 
 Python 3.9 through 3.13 are supported. The package is typed and includes `py.typed`.
@@ -55,10 +55,14 @@ checkout = nozle.checkout(
 
 Checkout can return any production transition shape:
 
-- `{"type": "stripe", "client_secret": "..."}`
-- `{"type": "stripe", "url": "https://..."}`
+- `{"type": "stripe", "client_secret": "cs_..."}`: Stripe embedded Checkout Session
+- `{"type": "razorpay", "key_id": "...", "order_id": "..."}`: Razorpay order for the modal
+- `{"type": "hosted", "payment_url": "https://..."}`: declared in the result types; `POST /checkout` does not return it for Razorpay (invoice payment URLs and credit top-ups return a `payment_url` with no checkout id to poll)
+- `{"type": "processing", "checkout_id": "...", "status": "..."}`: Razorpay order not ready, or a Stripe quoted upgrade replayed while its webhook is pending
 - `{"type": "completed", "status": "..."}`
 - `{"type": "scheduled", "status": "..."}`
+
+See [Payment providers](#payment-providers-stripe-and-razorpay) for what to do with each.
 
 The deprecated `success_url=` argument remains an alias for `return_url=`. The SDK
 never sends both fields and rejects conflicting values.
@@ -114,6 +118,10 @@ customer = nozle.customers.upsert(
 # Follows every active Core page and returns one normalized list.
 systems = nozle.credit_systems.list()
 ```
+
+If you create customers through the Nozle REST API instead of this SDK, a customer needs
+`sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider
+assignment is dropped.
 
 ### Customer and Entity credits
 
@@ -231,7 +239,7 @@ nozle.cost_events.track(
 )
 
 entitlement = nozle.can("customer-123", "code_completion")
-deduction = nozle.check_and_deduct("customer-123", "code_completion", credits=5)
+deduction = nozle.check_and_deduct("customer-123", credits=5)  # legacy wallet adapter; `feature` is deprecated and ignored
 health = nozle.ping()
 
 summary = nozle.margin.summary()
@@ -240,7 +248,9 @@ trend = nozle.margin.trend(granularity="week")
 ```
 
 If `track()` is called without `subscription_id`, the SDK resolves and caches the
-customer's single active subscription through Core. `track()` returns the
+customer's single active subscription through Core. `subscribe()`, `checkout()`,
+`cancel_subscription()` and `apply_subscription_transition()` clear that cache for the
+customer. A change made elsewhere needs an explicit `subscription_id`. `track()` returns the
 organization-wide `transaction_id`; when none is supplied, the SDK generates a UUID
 version 7 identifier before sending the request. This lets a Cost Event reference the
 Feature Event without waiting for a server response, and out-of-order delivery remains
@@ -323,8 +333,9 @@ the successful provider response or completed stream is preserved and a
 
 ## Errors
 
-`NozleAPIError` exposes `operation`, `status_code`, and credential-safe
-`response_details`. Local contract failures use `NozleValidationError` or
+`NozleAPIError` exposes `operation`, `status_code`, credential-safe
+`response_details`, the top-level `code`, and `has_code()` (see
+[Payment providers](#payment-providers-stripe-and-razorpay)). Local contract failures use `NozleValidationError` or
 `NozleAuthenticationError`; transport failures use `NozleTransportError`. Exception
 messages redact API keys and secret-shaped response fields.
 
@@ -332,37 +343,116 @@ messages redact API keys and secret-shaped response fields.
 
 AGPL-3.0-or-later
 
-### Razorpay checkout
+### Payment providers: Stripe and Razorpay
 
-The existing checkout method works with the customer's configured payment
-provider. Stripe responses remain compatible; Razorpay adds `razorpay`, `hosted`
-and `processing` response variants.
+`checkout()` and `checkout_invoice()` use the payment provider connected to your
+organization and assigned to the customer, and return a result whose `type` tells you
+what to do next. Branch on `type`; a browser callback alone never proves payment.
+
+| `type` | Provider | Next step |
+| --- | --- | --- |
+| `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
+| `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
+| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
+| `processing` | Razorpay or Stripe | Recover with `checkout_status(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
+| `completed`, `scheduled` | Either | No payment is due now: credits covered it, or the change takes effect later |
+
+**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They
+never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the
+`pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes
+it as `publishableKey`). Credit top-up purchases are different: they return a
+Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
 
 ```python
-checkout = nozle.checkout(
-    customer_id, "pro", return_url,
-    idempotency_key=attempt_id,
-    register_mandate=True,  # optional, explicit invoice-based UPI AutoPay setup
+result = nozle.checkout(
+    "customer-123",
+    "pro_monthly",
+    return_url="https://app.example.com/settings/billing",
 )
-checkout = nozle.checkout_invoice(invoice_id, idempotency_key=attempt_id)
-status = nozle.verify_checkout(checkout_id, {
-    "razorpay_order_id": callback["razorpay_order_id"],
-    "razorpay_payment_id": callback["razorpay_payment_id"],
-    "razorpay_signature": callback["razorpay_signature"],
-})
-status = nozle.checkout_status(checkout_id)
+if result["type"] == "stripe":
+    # Return the secret to the browser and mount Stripe Embedded Checkout with it.
+    client_secret = result.get("client_secret") or result.get("clientSecret")
+    # A new subscription has no checkout ID to poll: reload the subscription after
+    # Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
 ```
 
-All collection calls require a server-side secret key. Authenticate the buyer and
-bind checkout IDs to that buyer before forwarding browser callbacks. Render the
-returned public `key_id`/`order_id` in Razorpay Standard Checkout. Display success
-only when `status` and `fulfillment_status` are both `succeeded`; a browser
-callback or a pending debit is not proof that credits/subscriptions are available.
-A `processing` checkout can be polled and resumed using its nested `checkout`
-response once ready. Reuse your idempotency key when retrying creation.
+Idempotency keys have two Stripe edge cases today. A new-subscription checkout retried
+while the subscription is still `incomplete` fails with HTTP 422 `validation_errors`
+containing `subscription_incomplete`, even with the same key; recover by calling
+`checkout_invoice()` with the `invoice_id` from the first response. An invoice checkout
+retried with the same key and a different body currently returns HTTP 500, not 409, so
+keep the body identical for one key.
 
-Razorpay support is INR-only. UPI AutoPay requires merchant enablement and explicit
-customer authorization; one-time card or UPI payments do not create a mandate.
+**Razorpay.** Razorpay supports only INR. Return the `razorpay` result to the browser,
+open the modal there, and post the handler's three fields back to your backend.
+`verify_checkout()` sends them to Nozle, which checks the signature and fetches the
+payment from Razorpay; the SDK does not check the signature locally. Verify and status
+need an `sk_` key.
+
+```python
+# Backend: create. The result is {"type": "razorpay", "checkout_id", "key_id", "order_id",
+# "amount_cents" (paise), "currency": "INR", "expires_at", "invoice_id" or
+# "plan_upgrade_intent_id"}.
+checkout = nozle.checkout(
+    "customer-123",
+    "pro_monthly",
+    return_url="https://app.example.com/settings/billing",
+    idempotency_key="checkout-customer-123-pro_monthly-v1",
+    # register_mandate=True,  # UPI AutoPay: the result also has customer_id,
+    #                         # recurring and mandate_max_amount_cents
+)
+# Invoice-based collection: nozle.checkout_invoice(invoice_id, idempotency_key=attempt_id)
+
+# Browser (after loading https://checkout.razorpay.com/v1/checkout.js):
+#   new Razorpay({key: key_id, order_id, amount: amount_cents, currency, handler}).open()
+# For a mandate also pass customer_id and recurring: "1".
+
+# Backend: verify what the handler returned, then poll until both statuses succeed.
+if checkout["type"] == "razorpay":
+    status = nozle.verify_checkout(
+        checkout["checkout_id"],
+        {
+            "razorpay_order_id": callback["razorpay_order_id"],
+            "razorpay_payment_id": callback["razorpay_payment_id"],
+            "razorpay_signature": callback["razorpay_signature"],
+        },
+        customer_id="customer-123",
+        subscription_id="subscription-123",
+    )
+    status = nozle.checkout_status(
+        checkout["checkout_id"],
+        customer_id="customer-123",
+        subscription_id="subscription-123",
+    )
+    # status["status"]: awaiting_payment | processing | succeeded | failed | expired | needs_review
+```
+
+Authenticate the buyer and bind each `checkout_id` to that buyer before forwarding browser
+callbacks. Pass both scope fields to tie a call to one customer and subscription. Display
+success only when `status` and `fulfillment_status` are both `succeeded`; a browser callback
+or a pending debit is not proof that credits or subscriptions are available. Reuse your
+idempotency key when retrying creation. UPI AutoPay requires merchant enablement and
+explicit customer authorization; one-time card or UPI payments do not create a mandate.
+
+Provider failures raise `NozleAPIError`. `error.code` is the top-level code, and
+`error.has_code()` also matches the codes listed in `error_details`, for example
+`razorpay_requires_inr`, `payment_provider_required` or `invalid_checkout_signature`.
+
+```python
+from nozle import NozleAPIError
+
+try:
+    nozle.checkout("customer-123", "pro_monthly", return_url=return_url)
+except NozleAPIError as error:
+    if error.has_code("razorpay_requires_inr"):
+        ...  # price the plan in INR for customers who pay through Razorpay
+    else:
+        raise
+```
+
+See the [Stripe](https://docs.nozle.dev/integrations/stripe) and
+[Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides for connection
+setup, webhooks, and limits.
 
 ## React billing portal subscription management
 

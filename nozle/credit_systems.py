@@ -54,14 +54,14 @@ class CreditSystemsNamespace:
 
 def _normalize_credit_system(system: Mapping[str, Any]) -> CreditSystem:
     operation = "credit_systems.list"
-    required = ("lago_id", "code", "name", "unit_name", "status", "created_at", "updated_at")
+    required = ("nozle_id", "code", "name", "unit_name", "status", "created_at", "updated_at")
     if any(not isinstance(system.get(field), str) for field in required):
         raise NozleAPIError(operation, 200, "credit system response was incomplete")
     description = system.get("description")
     if description is not None and not isinstance(description, str):
         raise NozleAPIError(operation, 200, "credit system description was invalid")
     return {
-        "id": system["lago_id"],
+        "id": system["nozle_id"],
         "code": system["code"],
         "name": system["name"],
         "description": description,
