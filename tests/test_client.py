@@ -378,6 +378,69 @@ def test_customer_upsert_never_uses_engine(
     assert all("engine.example" not in request.url for request in requests_mock.request_history)
 
 
+@pytest.mark.parametrize(
+    ("method", "http", "path", "call"),
+    [
+        ("subscribe", "post", "/engine/api/v1/subscribe", lambda c: c.subscribe("cust_1", "pro")),
+        (
+            "checkout",
+            "post",
+            "/engine/api/v1/checkout",
+            lambda c: c.checkout("cust_1", "pro", "https://app.example/done"),
+        ),
+        (
+            "cancel_subscription",
+            "delete",
+            "/engine/api/v1/subscriptions/sub_old",
+            lambda c: c.cancel_subscription("cust_1", "sub_old"),
+        ),
+        (
+            "apply_subscription_transition",
+            "post",
+            "/engine/api/v1/subscriptions/transitions",
+            lambda c: c.apply_subscription_transition(
+                {
+                    "customer_id": "cust_1",
+                    "subscription_id": "sub_old",
+                    "operation": "cancel",
+                    "timing": "immediate",
+                },
+                idempotency_key="k1",
+            ),
+        ),
+    ],
+)
+def test_subscription_changing_calls_refresh_the_cached_subscription(
+    requests_mock: requests_mock.Mocker,
+    method: str,
+    http: str,
+    path: str,
+    call: Callable[[Nozle], object],
+) -> None:
+    lookup = requests_mock.get(
+        "https://api.example/core/api/v1/subscriptions",
+        [
+            {"json": {"subscriptions": [{"external_id": "sub_old"}]}},
+            {"json": {"subscriptions": [{"external_id": "sub_new"}]}},
+        ],
+    )
+    events = requests_mock.post("https://api.example/core/api/v1/events", json={})
+    getattr(requests_mock, http)("https://api.example" + path, json={})
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
+
+    client.track("cust_1", "event_1")
+    call(client)
+    client.track("cust_1", "event_2")
+
+    assert lookup.call_count == 2, method
+    assert [r.json()["event"]["external_subscription_id"] for r in events.request_history] == [
+        "sub_old",
+        "sub_new",
+    ]
+
+
 def test_cancel_subscription_defaults_to_end_of_period(
     requests_mock: requests_mock.Mocker,
 ) -> None:
