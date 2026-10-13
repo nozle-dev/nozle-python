@@ -7,7 +7,7 @@ name = "nozle-sdk"
 dynamic = ["version"]
 description = "Nozle SDK — usage tracking, margin intelligence, and entitlement checks for AI billing"
 readme = "README.md"
-license = "AGPL-3.0-or-later"
+license = "MIT"
 requires-python = ">=3.9"
 authors = [
     { name = "Nozle", email = "dev@nozle.ai" },
