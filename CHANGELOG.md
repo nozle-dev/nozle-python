@@ -10,6 +10,7 @@
 
 ### Deprecated
 
+- `check_and_deduct()` no longer needs `feature`: call `check_and_deduct(customer_id, credits=5)`. A `feature` argument is still accepted but ignored and never sent, so `check_and_deduct(customer_id, "completion", 5)` keeps working. A missing `credits` raises `NozleValidationError`.
 - `pending_subscription_id` on `scheduled` results is never returned. Use `subscription_id`. The Stripe `publishable_key`, `stripe_account` and `url` fields are not returned either; use your own Stripe publishable key.
 
 ## 0.9.1 — 2026-10-11

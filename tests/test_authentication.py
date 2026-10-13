@@ -16,7 +16,7 @@ from nozle import Nozle, NozleAuthenticationError
         lambda c: c.checkout("customer", "plan"),
         lambda c: c.subscribe("customer", "plan"),
         lambda c: c.ping(),
-        lambda c: c.check_and_deduct("customer", "feature", 1),
+        lambda c: c.check_and_deduct("customer", credits=1),
         lambda c: c.customers.upsert("customer"),
         lambda c: c.margin.summary(),
         lambda c: c.margin.by_customer(),

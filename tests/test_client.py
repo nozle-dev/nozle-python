@@ -339,12 +339,25 @@ def test_subscribe_ping_customer_and_check_and_deduct_contracts(
     assert customer_request.last_request.json() == {
         "customer": {"external_id": "cust_1", "name": "Acme"}
     }
-    assert client.check_and_deduct("cust_1", "completion", 5)["remaining"] == 95
-    assert requests_mock.last_request.json() == {
-        "customer_id": "cust_1",
-        "feature": "completion",
-        "credits": 5,
-    }
+    assert client.check_and_deduct("cust_1", credits=5)["remaining"] == 95
+    assert requests_mock.last_request.json() == {"customer_id": "cust_1", "credits": 5}
+    # Old callers still pass a feature: it is accepted but never sent.
+    for call in (
+        lambda: client.check_and_deduct("cust_1", "completion", 5),
+        lambda: client.check_and_deduct("cust_1", feature="completion", credits=5),
+        lambda: client.check_and_deduct("cust_1", 5),
+    ):
+        assert call()["remaining"] == 95
+        assert requests_mock.last_request.json() == {"customer_id": "cust_1", "credits": 5}
+
+
+@pytest.mark.parametrize("args", [(), ("completion",), (None, None), ("completion", True)])
+def test_check_and_deduct_requires_credits(args: tuple) -> None:
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    with requests_mock.Mocker() as m:
+        with pytest.raises(NozleValidationError, match="requires credits"):
+            client.check_and_deduct("cust_1", *args)
+        assert m.request_history == []
 
 
 def test_customer_upsert_never_uses_engine(
@@ -537,7 +550,7 @@ def test_margin_routes_and_trend_query(requests_mock: requests_mock.Mocker) -> N
         lambda client: client.checkout("c", "p"),
         lambda client: client.subscribe("c", "p"),
         lambda client: client.ping(),
-        lambda client: client.check_and_deduct("c", "f", 1),
+        lambda client: client.check_and_deduct("c", credits=1),
         lambda client: client.customers.upsert("c"),
         lambda client: client.margin.summary(),
         lambda client: client.credit_systems.list(),

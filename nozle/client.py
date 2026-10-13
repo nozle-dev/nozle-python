@@ -525,24 +525,30 @@ class Nozle:
     def check_and_deduct(
         self,
         customer_id: str,
-        feature: str,
-        credits: Union[int, float],
+        feature: Union[str, int, float, None] = None,
+        credits: Union[int, float, None] = None,
     ) -> CheckAndDeductResult:
+        """Deduct credits from the customer's wallet (legacy wallet adapter).
+
+        Call it as ``check_and_deduct(customer_id, credits=5)``. ``feature`` is
+        deprecated and ignored: it is not sent, so old calls such as
+        ``check_and_deduct(customer_id, "completion", 5)`` keep working.
+        """
         operation = "check_and_deduct"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
-        require_non_empty(feature, "feature", operation)
+        # check_and_deduct("c", 5): the number is the credits, not a feature name.
+        if credits is None and isinstance(feature, (int, float)) and not isinstance(feature, bool):
+            credits = feature
+        if credits is None or isinstance(credits, bool) or not isinstance(credits, (int, float)):
+            raise NozleValidationError(f"{operation} requires credits")
         return cast(
             CheckAndDeductResult,
             self._engine.request(
                 operation,
                 "POST",
                 "/api/v1/check-and-deduct",
-                json_body={
-                    "customer_id": customer_id,
-                    "feature": feature,
-                    "credits": credits,
-                },
+                json_body={"customer_id": customer_id, "credits": credits},
             ),
         )
 

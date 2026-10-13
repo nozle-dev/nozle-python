@@ -235,7 +235,7 @@ nozle.cost_events.track(
 )
 
 entitlement = nozle.can("customer-123", "code_completion")
-deduction = nozle.check_and_deduct("customer-123", "code_completion", credits=5)
+deduction = nozle.check_and_deduct("customer-123", credits=5)  # legacy wallet adapter; `feature` is deprecated and ignored
 health = nozle.ping()
 
 summary = nozle.margin.summary()
