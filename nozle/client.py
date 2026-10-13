@@ -99,7 +99,7 @@ class Nozle:
         if not subscription_id:
             subscription_id = self._resolve_subscription(customer_id)
         return _track(
-            self._events,
+            self._engine,
             self.api_key,
             customer_id,
             event,

@@ -77,8 +77,10 @@ def test_plans_reject_unknown_key_type_before_network(
 def test_track_with_explicit_subscription_and_timestamp(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    requests_mock.post("https://api.example/core/api/v1/events", json={})
-    client = Nozle("sk_test", events_url="https://api.example/core")
+    requests_mock.post("https://api.example/engine/api/v1/events", json={})
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
 
     client.track(
         "cust_1",
@@ -101,7 +103,7 @@ def test_track_with_explicit_subscription_and_timestamp(
 
 
 def test_track_generates_transaction_id(requests_mock: requests_mock.Mocker) -> None:
-    requests_mock.post("https://api.nozle.app/core/api/v1/events", text="accepted")
+    requests_mock.post("https://api.nozle.app/engine/api/v1/events", text="accepted")
 
     transaction_id = Nozle("sk_test").track("cust_1", "api_call", subscription_id="sub_1")
 
@@ -113,8 +115,10 @@ def test_track_generates_transaction_id(requests_mock: requests_mock.Mocker) -> 
 def test_track_preserves_numeric_timestamp_and_rejects_invalid_value(
     requests_mock: requests_mock.Mocker,
 ) -> None:
-    requests_mock.post("https://api.example/core/api/v1/events", json={})
-    client = Nozle("sk_test", events_url="https://api.example/core")
+    requests_mock.post("https://api.example/engine/api/v1/events", json={})
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
 
     client.track("cust_1", "api_call", subscription_id="sub_1", timestamp="1784548800.123")
     assert requests_mock.last_request.json()["event"]["timestamp"] == "1784548800.123"
@@ -181,8 +185,10 @@ def test_track_resolves_and_caches_subscription(requests_mock: requests_mock.Moc
         "https://api.example/core/api/v1/subscriptions",
         json={"subscriptions": [{"external_id": "sub_auto"}]},
     )
-    events = requests_mock.post("https://api.example/core/api/v1/events", json={})
-    client = Nozle("sk_test", events_url="https://api.example/core")
+    events = requests_mock.post("https://api.example/engine/api/v1/events", json={})
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
 
     client.track("cust_1", "event_1")
     client.track("cust_1", "event_2")
@@ -424,7 +430,7 @@ def test_subscription_changing_calls_refresh_the_cached_subscription(
             {"json": {"subscriptions": [{"external_id": "sub_new"}]}},
         ],
     )
-    events = requests_mock.post("https://api.example/core/api/v1/events", json={})
+    events = requests_mock.post("https://api.example/engine/api/v1/events", json={})
     getattr(requests_mock, http)("https://api.example" + path, json={})
     client = Nozle(
         "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
