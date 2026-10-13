@@ -71,8 +71,9 @@ class _StripeCheckoutRequired(TypedDict):
 
 
 class StripeCheckoutResult(_StripeCheckoutRequired, total=False):
-    # Nozle never returns publishable_key, stripe_account or url: use your own Stripe
-    # publishable key and mount the embedded Checkout Session client_secret.
+    # Plan and invoice checkout never return publishable_key, stripe_account or url:
+    # use your own Stripe publishable key and mount the embedded Checkout Session
+    # client_secret.
     publishable_key: str
     stripe_account: str
     checkout_id: str
@@ -225,6 +226,10 @@ class _ProcessingCheckoutRequired(TypedDict):
 
 
 class ProcessingCheckoutResult(_ProcessingCheckoutRequired, total=False):
+    """Not ready to collect yet: Razorpay while the order is created, or Stripe when a
+    quoted upgrade is replayed while its webhook is pending. Recover with
+    checkout_status(checkout_id)."""
+
     amount_cents: int
     currency: str
     expires_at: str

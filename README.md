@@ -6,7 +6,7 @@ ledger usage, margin intelligence, and LLM usage capture.
 ## Install
 
 ```bash
-pip install nozle-sdk==0.9.1
+pip install nozle-sdk==0.10.0
 ```
 
 Python 3.9 through 3.13 are supported. The package is typed and includes `py.typed`.
@@ -58,7 +58,7 @@ Checkout can return any production transition shape:
 - `{"type": "stripe", "client_secret": "cs_..."}`: Stripe embedded Checkout Session
 - `{"type": "razorpay", "key_id": "...", "order_id": "..."}`: Razorpay order for the modal
 - `{"type": "hosted", "payment_url": "https://..."}`: Razorpay payment link
-- `{"type": "processing", "checkout_id": "...", "status": "..."}`: Razorpay order not ready
+- `{"type": "processing", "checkout_id": "...", "status": "..."}`: Razorpay order not ready, or a Stripe quoted upgrade replayed while its webhook is pending
 - `{"type": "completed", "status": "..."}`
 - `{"type": "scheduled", "status": "..."}`
 
@@ -118,6 +118,10 @@ customer = nozle.customers.upsert(
 # Follows every active Core page and returns one normalized list.
 systems = nozle.credit_systems.list()
 ```
+
+If you create customers through the Nozle REST API instead of this SDK, a customer needs
+`sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider
+assignment is dropped.
 
 ### Customer and Entity credits
 
@@ -348,13 +352,14 @@ what to do next. Branch on `type`; a browser callback alone never proves payment
 | `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
 | `hosted` | Razorpay | Redirect the customer to `payment_url` (a payment link) |
-| `processing` | Razorpay | Recover with `checkout_status(checkout_id)` instead of starting another checkout |
+| `processing` | Razorpay or Stripe | Recover with `checkout_status(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now: credits covered it, or the change takes effect later |
 
-**Stripe.** Nozle always creates an embedded Checkout Session. It never returns a
-Stripe-hosted URL or your Stripe publishable key, so the browser needs the `pk_` key for
-the Stripe account connected in Nozle (the React `Checkout` component takes it as
-`publishableKey`).
+**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They
+never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the
+`pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes
+it as `publishableKey`). Credit top-up purchases are different: they return a
+Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
 
 ```python
 result = nozle.checkout(
@@ -368,6 +373,13 @@ if result["type"] == "stripe":
     # A new subscription has no checkout ID to poll: reload the subscription after
     # Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
 ```
+
+Idempotency keys have two Stripe edge cases today. A new-subscription checkout retried
+while the subscription is still `incomplete` fails with HTTP 422 `validation_errors`
+containing `subscription_incomplete`, even with the same key; recover by calling
+`checkout_invoice()` with the `invoice_id` from the first response. An invoice checkout
+retried with the same key and a different body currently returns HTTP 500, not 409, so
+keep the body identical for one key.
 
 **Razorpay.** Razorpay supports only INR. Return the `razorpay` result to the browser,
 open the modal there, and post the handler's three fields back to your backend.
