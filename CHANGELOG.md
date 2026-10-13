@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- `pending_subscription_id` from `ScheduledCheckoutResult`. The API never returned it; the pending subscription ID is `subscription_id`. The `pending_subscription_id` argument of `withdraw_pending_subscription_change()` is unchanged.
+
 ## 0.10.0 — 2026-10-13
 
 ### Breaking
@@ -19,7 +25,7 @@
 ### Deprecated
 
 - `feature` on `check_and_deduct()` is accepted but ignored and never sent, because the endpoint never used it, so `check_and_deduct(customer_id, "completion", 5)` keeps working.
-- `pending_subscription_id` on `scheduled` results is never returned. Use `subscription_id`. The Stripe `publishable_key`, `stripe_account` and `url` fields are not returned by plan and invoice checkout either; use your own Stripe publishable key.
+- The Stripe `publishable_key`, `stripe_account` and `url` fields are not returned by plan and invoice checkout; use your own Stripe publishable key.
 
 ## 0.9.1 — 2026-10-11
 

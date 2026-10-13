@@ -114,8 +114,6 @@ class _ScheduledCheckoutRequired(TypedDict):
 
 
 class ScheduledCheckoutResult(_ScheduledCheckoutRequired, total=False):
-    # Deprecated: never returned. The pending subscription ID is subscription_id.
-    pending_subscription_id: str
     transition_direction: str
     transition_policy: str
     subscription_id: str
