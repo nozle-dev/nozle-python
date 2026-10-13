@@ -426,7 +426,9 @@ def test_subscription_changing_calls_refresh_the_cached_subscription(
     )
     events = requests_mock.post("https://api.example/core/api/v1/events", json={})
     getattr(requests_mock, http)("https://api.example" + path, json={})
-    client = Nozle("sk_test", base_url="https://api.example/engine", events_url="https://api.example/core")
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
 
     client.track("cust_1", "event_1")
     call(client)
