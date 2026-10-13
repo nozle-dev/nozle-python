@@ -248,7 +248,9 @@ trend = nozle.margin.trend(granularity="week")
 ```
 
 If `track()` is called without `subscription_id`, the SDK resolves and caches the
-customer's single active subscription through Core. `track()` returns the
+customer's single active subscription through Core. `subscribe()`, `checkout()`,
+`cancel_subscription()` and `apply_subscription_transition()` clear that cache for the
+customer. A change made elsewhere needs an explicit `subscription_id`. `track()` returns the
 organization-wide `transaction_id`; when none is supplied, the SDK generates a UUID
 version 7 identifier before sending the request. This lets a Cost Event reference the
 Feature Event without waiting for a server response, and out-of-order delivery remains
