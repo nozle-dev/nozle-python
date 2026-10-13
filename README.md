@@ -339,10 +339,6 @@ the successful provider response or completed stream is preserved and a
 `NozleAuthenticationError`; transport failures use `NozleTransportError`. Exception
 messages redact API keys and secret-shaped response fields.
 
-## License
-
-AGPL-3.0-or-later
-
 ### Payment providers: Stripe and Razorpay
 
 `checkout()` and `checkout_invoice()` use the payment provider connected to your
@@ -465,3 +461,7 @@ Version `0.9.0` adds `subscription_options(customer_id, subscription_id)`,
 Use the existing checkout/transition methods with the selected subscription, signed quote,
 and a stable action key. Scope `checkout_status` and `verify_checkout` with both
 `customer_id` and `subscription_id`. See the [method examples](https://docs.nozle.dev/sdks/python/billing#subscription-self-service).
+
+## License
+
+MIT. Versions up to 0.9.1 were published under AGPL-3.0-or-later.
