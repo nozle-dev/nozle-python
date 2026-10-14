@@ -384,6 +384,49 @@ def test_customer_upsert_never_uses_engine(
     assert all("engine.example" not in request.url for request in requests_mock.request_history)
 
 
+def test_customer_upsert_links_existing_provider_customer(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    core = requests_mock.post(
+        "https://api.example/core/api/v1/customers",
+        json={"customer": {"external_id": "acme"}},
+    )
+    client = Nozle("sk_merchant", events_url="https://api.example/core")
+
+    client.customers.upsert(
+        "acme",
+        billing_configuration={
+            "payment_provider": "stripe",
+            "payment_provider_code": "main",
+            "provider_customer_id": "cus_123",
+        },
+    )
+
+    assert core.last_request.json() == {
+        "customer": {
+            "external_id": "acme",
+            "billing_configuration": {
+                "payment_provider": "stripe",
+                "payment_provider_code": "main",
+                "provider_customer_id": "cus_123",
+            },
+        }
+    }
+
+
+def test_customer_upsert_requires_payment_provider_before_network_io() -> None:
+    client = Nozle("sk_merchant", events_url="https://api.example/core")
+    with requests_mock.Mocker() as m:
+        with pytest.raises(
+            NozleValidationError, match="requires billing_configuration.payment_provider"
+        ):
+            client.customers.upsert(
+                "acme",
+                billing_configuration={"payment_provider": "", "provider_customer_id": "cus_123"},
+            )
+        assert m.request_history == []
+
+
 @pytest.mark.parametrize(
     ("method", "http", "path", "call"),
     [

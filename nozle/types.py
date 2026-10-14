@@ -443,6 +443,20 @@ class PingResult(_PingResultRequired, total=False):
     version: str
 
 
+class _CustomerBillingConfigurationRequired(TypedDict):
+    payment_provider: str
+
+
+class CustomerBillingConfiguration(_CustomerBillingConfigurationRequired, total=False):
+    """Payment provider assignment. Set ``provider_customer_id`` to link an existing
+    provider customer (e.g. a Stripe ``cus_…``) without creating a new one."""
+
+    payment_provider_code: str
+    provider_customer_id: str
+    sync_with_provider: bool
+    provider_payment_methods: list[str]
+
+
 class _CustomerUpsertResultRequired(TypedDict):
     external_id: str
 
