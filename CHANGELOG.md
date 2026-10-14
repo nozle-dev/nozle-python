@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.12.0 — 2026-10-14
+
+### Added
+
+- `customers.upsert()` accepts `billing_configuration` (`CustomerBillingConfiguration`: `payment_provider`, `payment_provider_code`, `provider_customer_id`, `sync_with_provider`, `provider_payment_methods`) and sends it to Core, so a customer can be linked to an existing Stripe customer in the same call. Upserts without it send the same body as before.
+
 ## 0.11.0 — 2026-10-13
 
 ### Changed

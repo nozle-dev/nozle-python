@@ -117,6 +117,17 @@ customer = nozle.customers.upsert(
     email="billing@example.com",
 )
 
+# Link a customer that already exists in Stripe, without creating a new one.
+# A provider assignment needs provider_customer_id or sync_with_provider=True.
+nozle.customers.upsert(
+    "customer-123",
+    billing_configuration={
+        "payment_provider": "stripe",
+        "payment_provider_code": "stripe_main",
+        "provider_customer_id": "cus_ABC123",
+    },
+)
+
 # Follows every active Core page and returns one normalized list.
 systems = nozle.credit_systems.list()
 ```
