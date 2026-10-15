@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- `entity_subscriptions.checkout`, `change_plan`, `checkout_many` and `cancel` leave out optional fields you did not set instead of sending JSON `null`, so the API applies its defaults.
+
+### Added
+
+- `entity_subscriptions.change_plan` accepts `billing_time`, which the API already reads.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added

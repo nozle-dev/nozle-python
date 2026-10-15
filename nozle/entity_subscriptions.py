@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, cast
+from typing import Any, Sequence, cast
 
 from nozle._transport import HttpTransport
 from nozle._validation import (
@@ -123,11 +123,9 @@ class EntitySubscriptionsNamespace:
             "POST",
             f"/api/v1/customers/{path_segment(customer_id)}/entity-subscriptions/checkout",
             json_body={
-                "entity_subscription_checkout": {
-                    "billing_time": billing_time,
-                    "return_url": return_url,
-                    "items": request_items,
-                }
+                "entity_subscription_checkout": _present(
+                    {"billing_time": billing_time, "return_url": return_url, "items": request_items}
+                )
             },
             headers={"Idempotency-Key": idempotency_key},
         )
@@ -143,6 +141,7 @@ class EntitySubscriptionsNamespace:
         *,
         plan_code: str,
         return_url: str | None = None,
+        billing_time: str | None = None,
         idempotency_key: str | None = None,
     ) -> CheckoutResult:
         return self._change(
@@ -151,6 +150,7 @@ class EntitySubscriptionsNamespace:
             entity_id,
             plan_code=plan_code,
             return_url=return_url,
+            billing_time=billing_time,
             idempotency_key=idempotency_key,
         )
 
@@ -174,12 +174,14 @@ class EntitySubscriptionsNamespace:
                 operation,
                 "POST",
                 f"{self._entity_path(customer_id, entity_id)}/cancel",
-                json_body={
-                    "timing": timing,
-                    "credit_action": credit_action,
-                    "refund_mode": refund_mode,
-                    "final_invoice_action": final_invoice_action,
-                },
+                json_body=_present(
+                    {
+                        "timing": timing,
+                        "credit_action": credit_action,
+                        "refund_mode": refund_mode,
+                        "final_invoice_action": final_invoice_action,
+                    }
+                ),
                 headers={"Idempotency-Key": idempotency_key},
             ),
         )
@@ -221,16 +223,14 @@ class EntitySubscriptionsNamespace:
                 operation,
                 "POST",
                 f"{self._entity_path(customer_id, entity_id)}/{action}",
-                json_body={
-                    "plan_code": plan_code,
-                    "return_url": return_url,
-                    "billing_time": billing_time,
-                    **(
-                        {"register_mandate": register_mandate}
-                        if register_mandate is not None
-                        else {}
-                    ),
-                },
+                json_body=_present(
+                    {
+                        "plan_code": plan_code,
+                        "return_url": return_url,
+                        "billing_time": billing_time,
+                        "register_mandate": register_mandate,
+                    }
+                ),
                 headers=headers,
             ),
         )
@@ -246,3 +246,8 @@ class EntitySubscriptionsNamespace:
             f"/api/v1/customers/{path_segment(customer_id)}/entities/"
             f"{path_segment(entity_id)}/subscription"
         )
+
+
+def _present(body: dict[str, Any]) -> dict[str, Any]:
+    """Leave out optional fields that were not set, so the API applies its defaults."""
+    return {key: value for key, value in body.items() if value is not None}
