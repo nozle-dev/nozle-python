@@ -172,7 +172,9 @@ def test_bulk_entity_subscription_checkout_validates_before_network(
 
 def test_unset_optional_fields_are_left_out(requests_mock: requests_mock.Mocker) -> None:
     base = "https://api.example/core/api/v1/customers/workspace"
-    change = requests_mock.post(f"{base}/entities/user-42/subscription/change-plan", json={"type": "completed"})
+    change = requests_mock.post(
+        f"{base}/entities/user-42/subscription/change-plan", json={"type": "completed"}
+    )
     batch = requests_mock.post(
         f"{base}/entity-subscriptions/checkout",
         json={"entity_subscription_checkout": {"id": "batch-1"}},
@@ -189,6 +191,7 @@ def test_unset_optional_fields_are_left_out(requests_mock: requests_mock.Mocker)
         idempotency_key="batch-1",
     )
     assert batch.last_request.json() == {
-        "entity_subscription_checkout": {"items": [{"external_entity_id": "user-42", "plan_code": "pro"}]}
+        "entity_subscription_checkout": {
+            "items": [{"external_entity_id": "user-42", "plan_code": "pro"}]
+        }
     }
-

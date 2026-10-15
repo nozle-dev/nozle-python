@@ -72,9 +72,7 @@ class HttpTransport:
         # Retry only a request that is safe to repeat: a read, a call with an Idempotency-Key, or a
         # call the caller marks idempotent. Network errors, timeouts, 429 and 5xx are retried.
         safe = (
-            method.upper() in ("GET", "HEAD")
-            or idempotent
-            or "Idempotency-Key" in request_headers
+            method.upper() in ("GET", "HEAD") or idempotent or "Idempotency-Key" in request_headers
         )
         retries = self.max_retries if safe else 0
         body = _without_unset(json_body)

@@ -18,12 +18,25 @@ import requests_mock
 
 from nozle import Nozle
 
-OPERATIONS: dict[str, Any] = json.loads((Path(__file__).parent / "openapi_requests.json").read_text())
+OPERATIONS: dict[str, Any] = json.loads(
+    (Path(__file__).parent / "openapi_requests.json").read_text()
+)
 PATTERNS = [
-    (key.split(" ", 1)[0], re.compile("^" + re.sub(r"\{[^/]+\}", "[^/]+", key.split(" ", 1)[1]) + "$"), key)
+    (
+        key.split(" ", 1)[0],
+        re.compile("^" + re.sub(r"\{[^/]+\}", "[^/]+", key.split(" ", 1)[1]) + "$"),
+        key,
+    )
     for key in OPERATIONS
 ]
-TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "object": dict, "array": list}
+TYPES = {
+    "string": str,
+    "integer": int,
+    "number": (int, float),
+    "boolean": bool,
+    "object": dict,
+    "array": list,
+}
 
 
 def find_operation(method: str, path: str) -> str | None:
@@ -54,7 +67,12 @@ def problems(value: Any, schema: dict[str, Any], where: str) -> list[str]:
     kinds = [kinds] if isinstance(kinds, str) else list(kinds or [])
     if value is None:
         return [] if "null" in kinds or not kinds else [f"{where}: null is not allowed"]
-    if kinds and not any(kind != "null" and isinstance(value, TYPES[kind]) and not (kind in ("integer", "number") and isinstance(value, bool)) for kind in kinds):
+    if kinds and not any(
+        kind != "null"
+        and isinstance(value, TYPES[kind])
+        and not (kind in ("integer", "number") and isinstance(value, bool))
+        for kind in kinds
+    ):
         return [f"{where}: {value!r} is not {kinds}"]
     if "enum" in merged and value not in merged["enum"]:
         return [f"{where}: {value!r} is not one of {merged['enum']}"]
@@ -73,15 +91,21 @@ def problems(value: Any, schema: dict[str, Any], where: str) -> list[str]:
 
 
 def client() -> Nozle:
-    return Nozle("sk_test", base_url="https://api.example/engine", events_url="https://api.example/core")
+    return Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
 
 
 ITEMS = [{"external_entity_id": "user-42", "plan_code": "pro"}]
 CALLS: list[Callable[[Nozle], Any]] = [
     lambda n: n.track("cust", "api_calls", {"tokens": 1}, subscription_id="sub_1"),
     lambda n: n.usage.check("cust", "emails"),
-    lambda n: n.usage.track("cust", "emails", idempotency_key="k1", timestamp="2026-10-15T10:00:00Z"),
-    lambda n: n.cost_events.track(cost_meter_code="llm_tokens", external_customer_id="cust", properties={"tokens": 5}),
+    lambda n: n.usage.track(
+        "cust", "emails", idempotency_key="k1", timestamp="2026-10-15T10:00:00Z"
+    ),
+    lambda n: n.cost_events.track(
+        cost_meter_code="llm_tokens", external_customer_id="cust", properties={"tokens": 5}
+    ),
     lambda n: n.customers.upsert("cust", name="Acme"),
     lambda n: n.subscribe("cust", "pro"),
     lambda n: n.checkout("cust", "pro", "https://app.example.com/billing"),
@@ -90,7 +114,9 @@ CALLS: list[Callable[[Nozle], Any]] = [
     lambda n: n.entity_subscriptions.checkout_many("cust", items=ITEMS, idempotency_key="b1"),
     lambda n: n.entity_subscriptions.cancel("cust", "user-42", idempotency_key="c1"),
     lambda n: n.entities.upsert("cust", "user-42", status="active", idempotency_key="e1"),
-    lambda n: n.credits.allocate("cust", "user-42", credit_system_code="ai_credits", amount="10", idempotency_key="a1"),
+    lambda n: n.credits.allocate(
+        "cust", "user-42", credit_system_code="ai_credits", amount="10", idempotency_key="a1"
+    ),
 ]
 
 
@@ -116,7 +142,14 @@ def test_request_body_fits_the_api_schema(call: Callable[[Nozle], Any]) -> None:
 def test_the_check_rejects_null_unknown_keys_and_values_outside_an_enum() -> None:
     key = find_operation("POST", "/core/api/v1/customers/cust/entity-subscriptions/checkout")
     assert key
-    body = {"entity_subscription_checkout": {"items": ITEMS, "billing_time": "", "return_url": None, "extra": 1}}
+    body = {
+        "entity_subscription_checkout": {
+            "items": ITEMS,
+            "billing_time": "",
+            "return_url": None,
+            "extra": 1,
+        }
+    }
     found = problems(body, OPERATIONS[key], key)
     assert any("billing_time" in item for item in found)
     assert any("null is not allowed" in item for item in found)
