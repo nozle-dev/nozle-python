@@ -174,7 +174,6 @@ class _SubscriptionOptionsRequired(TypedDict):
 
 class SubscriptionOptions(_SubscriptionOptionsRequired, total=False):
     checkout: Optional[SubscriptionCheckoutSummary]
-    blocked_reason: Optional[str]
 
 
 class SubscriptionChangePreview(TypedDict):
@@ -434,13 +433,9 @@ class EntitySubscriptionCancelResult(TypedDict):
     subscription_transition: SubscriptionTransitionResultBody
 
 
-class _PingResultRequired(TypedDict):
+class PingResult(TypedDict):
     ok: bool
     engine: str
-
-
-class PingResult(_PingResultRequired, total=False):
-    version: str
 
 
 class _CustomerBillingConfigurationRequired(TypedDict):

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Removed
+
+- `PingResult.version` and `SubscriptionOptions.blocked_reason` are removed from the types. The API has never sent either field, so code reading them always got nothing.
+
+### Added
+
+- A contract test: `tests/contract` checks that each SDK response type declares only keys the API schema has and requires only keys the schema requires. `scripts/sync_openapi_contract.py` refreshes the schemas from `nozle-openapi.yaml`.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added
