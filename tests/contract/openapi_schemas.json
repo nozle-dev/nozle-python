@@ -1,0 +1,234 @@
+{
+  "BillingSubscriptionOptionsResponse": {
+    "properties": [
+      "checkout",
+      "eligible_plans",
+      "pending_change",
+      "subscription"
+    ],
+    "required": [
+      "checkout",
+      "eligible_plans",
+      "pending_change",
+      "subscription"
+    ]
+  },
+  "CostEventAccepted": {
+    "properties": [
+      "cost_event_id",
+      "status"
+    ],
+    "required": [
+      "cost_event_id",
+      "status"
+    ]
+  },
+  "CreditsCustomerBalance": {
+    "properties": [
+      "as_of",
+      "available",
+      "credit_system",
+      "credit_system_id",
+      "credit_system_name",
+      "customer_id",
+      "sources",
+      "system_status",
+      "unit_name"
+    ],
+    "required": [
+      "as_of",
+      "available",
+      "credit_system",
+      "credit_system_id",
+      "credit_system_name",
+      "customer_id",
+      "sources",
+      "system_status",
+      "unit_name"
+    ]
+  },
+  "CreditsCustomerBalanceList": {
+    "properties": [
+      "as_of",
+      "balances",
+      "customer_id"
+    ],
+    "required": [
+      "as_of",
+      "balances",
+      "customer_id"
+    ]
+  },
+  "CreditsCustomerOperationPage": {
+    "properties": [
+      "customer_id",
+      "next_cursor",
+      "operations"
+    ],
+    "required": [
+      "customer_id",
+      "next_cursor",
+      "operations"
+    ]
+  },
+  "CreditsEntity": {
+    "properties": [
+      "created_at",
+      "customer_id",
+      "deleted_at",
+      "external_id",
+      "id",
+      "metadata",
+      "name",
+      "status",
+      "updated_at"
+    ],
+    "required": [
+      "created_at",
+      "customer_id",
+      "deleted_at",
+      "external_id",
+      "id",
+      "metadata",
+      "name",
+      "status",
+      "updated_at"
+    ]
+  },
+  "CreditsEntityBalance": {
+    "properties": [
+      "as_of",
+      "consumed",
+      "credit_system",
+      "credit_system_id",
+      "credit_system_name",
+      "customer_id",
+      "effective_available",
+      "entity_available",
+      "entity_id",
+      "entity_status",
+      "pool_policy",
+      "shared_available",
+      "sources",
+      "system_status",
+      "unit_name"
+    ],
+    "required": [
+      "as_of",
+      "consumed",
+      "credit_system",
+      "credit_system_id",
+      "credit_system_name",
+      "customer_id",
+      "effective_available",
+      "entity_available",
+      "entity_id",
+      "entity_status",
+      "pool_policy",
+      "shared_available",
+      "sources",
+      "system_status",
+      "unit_name"
+    ]
+  },
+  "CreditsEntityBalanceList": {
+    "properties": [
+      "as_of",
+      "balances",
+      "customer_id",
+      "entity_id",
+      "entity_status"
+    ],
+    "required": [
+      "as_of",
+      "balances",
+      "customer_id",
+      "entity_id",
+      "entity_status"
+    ]
+  },
+  "CreditsEntityPage": {
+    "properties": [
+      "customer_id",
+      "entities",
+      "next_cursor"
+    ],
+    "required": [
+      "customer_id",
+      "entities",
+      "next_cursor"
+    ]
+  },
+  "CreditsUsageCheckResponse": {
+    "properties": [
+      "advisory",
+      "allowed",
+      "available",
+      "credit_system",
+      "credits_required",
+      "entity_id",
+      "metric_amount",
+      "pool_policy",
+      "projected_deductions",
+      "projected_remaining",
+      "reason"
+    ],
+    "required": [
+      "advisory",
+      "allowed",
+      "available",
+      "credit_system",
+      "credits_required",
+      "metric_amount"
+    ]
+  },
+  "CreditsUsageTrackResponse": {
+    "properties": [
+      "allowed",
+      "available",
+      "credit_system",
+      "credits_consumed",
+      "credits_required",
+      "deductions",
+      "entity_id",
+      "metric_amount",
+      "operation_id",
+      "pool_policy",
+      "reason",
+      "remaining"
+    ],
+    "required": [
+      "allowed"
+    ]
+  },
+  "PlatformCanResponse": {
+    "properties": [
+      "allowed",
+      "configuration",
+      "economics",
+      "feature_type",
+      "limit",
+      "overage",
+      "policy",
+      "reason",
+      "remaining",
+      "used"
+    ],
+    "required": [
+      "allowed",
+      "limit",
+      "remaining",
+      "used"
+    ]
+  },
+  "PlatformPingResponse": {
+    "properties": [
+      "engine",
+      "ok"
+    ],
+    "required": [
+      "engine",
+      "ok"
+    ]
+  }
+}
