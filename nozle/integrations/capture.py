@@ -22,6 +22,7 @@ from nozle.integrations._common import (
     DetectedUsage,
     StreamUsageCollector,
     capture_provider_usage,
+    check_feature_once,
     detect_usage,
     warn_tracking_failure,
 )
@@ -152,6 +153,9 @@ class _Call:
             latency_ms=int((time.monotonic() - self.started) * 1000),
         ):
             options.report(error)
+        setup_error = check_feature_once(options.nozle, options.feature_code)
+        if setup_error is not None:
+            options.report(setup_error)
 
 
 def _prepare(http: ModuleType, options: _Options, request: Any) -> tuple[Any, Optional[_Call]]:
@@ -342,7 +346,8 @@ def wrap_http_client(
     changed in place and returned. ``customer_id`` is a string, or a function called with each
     request. A request can also name its customer with the ``X-Nozle-Customer-Id`` header, which
     wins and is not sent to the provider. Without a customer the request passes through and
-    nothing is recorded. Recording failures go to ``on_error``, or to a ``NozleTrackingWarning``.
+    nothing is recorded. Recording failures go to ``on_error``, or to a ``NozleTrackingWarning``,
+    and so does a ``feature_not_found`` error, once per event code, when no Feature has the code.
     """
     http = _client_module(client)
     options = _Options(
