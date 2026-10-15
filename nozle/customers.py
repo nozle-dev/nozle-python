@@ -43,5 +43,6 @@ class CustomersNamespace:
             "POST",
             "/api/v1/customers",
             json_body={"customer": customer},
+            idempotent=True,
         )
         return cast(CustomerUpsertResult, payload["customer"])

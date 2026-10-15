@@ -59,6 +59,8 @@ class Nozle:
         events_url: str = "https://api.nozle.app/core",
         timeout: float = 10,
         *,
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
         _session: Optional[requests.Session] = None,
     ) -> None:
         self.api_key = api_key
@@ -68,10 +70,20 @@ class Nozle:
         self._session = _session or requests.Session()
         self._owns_session = _session is None
         self._engine = HttpTransport(
-            self.base_url, self.api_key, timeout=self.timeout, session=self._session
+            self.base_url,
+            self.api_key,
+            timeout=self.timeout,
+            session=self._session,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
         )
         self._events = HttpTransport(
-            self.events_url, self.api_key, timeout=self.timeout, session=self._session
+            self.events_url,
+            self.api_key,
+            timeout=self.timeout,
+            session=self._session,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
         )
         self.margin = MarginClient(
             self.base_url, self.api_key, timeout=self.timeout, _transport=self._engine
@@ -394,6 +406,7 @@ class Nozle:
                 "POST",
                 "/api/v1/subscriptions/transitions/preview",
                 json_body=body,
+                idempotent=True,
             ),
         )
 

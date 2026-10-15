@@ -45,7 +45,9 @@ class UsageNamespace:
             body["credit_system_code"] = credit_system_code
         return cast(
             UsageCheckResult,
-            self._transport.request(operation, "POST", "/api/v1/usage/check", json_body=body),
+            self._transport.request(
+                operation, "POST", "/api/v1/usage/check", json_body=body, idempotent=True
+            ),
         )
 
     def track(

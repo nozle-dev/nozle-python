@@ -59,6 +59,7 @@ class CostEventsNamespace:
             "POST",
             "/api/v1/cost-events",
             json_body=body,
+            idempotent=True,
         )
         if not isinstance(payload, Mapping):
             raise NozleAPIError(operation, 202, "response was not a JSON object")

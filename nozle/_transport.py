@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Mapping, Optional, Union
@@ -23,7 +25,7 @@ _SENSITIVE_KEYS = {
 
 
 class HttpTransport:
-    """Shared zero-retry requests transport used by all SDK namespaces."""
+    """Shared requests transport used by all SDK namespaces. It never retries unless ``max_retries`` is set."""
 
     def __init__(
         self,
@@ -31,10 +33,14 @@ class HttpTransport:
         api_key: str,
         timeout: float,
         session: Optional[requests.Session] = None,
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._api_key = api_key
         self.timeout = timeout
+        self.max_retries = max(0, int(max_retries))
+        self.retry_delay = retry_delay
         self._owns_session = session is None
         self.session = session or requests.Session()
         if session is None:
@@ -52,6 +58,7 @@ class HttpTransport:
         json_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         expect_json: bool = True,
+        idempotent: bool = False,
     ) -> Any:
         request_headers: Dict[str, str] = {"Authorization": f"Bearer {self._api_key}"}
         if json_body is not None:
@@ -59,18 +66,39 @@ class HttpTransport:
         if headers:
             request_headers.update(headers)
 
-        try:
-            response = self.session.request(
-                method=method,
-                url=f"{self.base_url}{path}",
-                headers=request_headers,
-                params=params,
-                json=json_body,
-                timeout=self.timeout,
-            )
-        except requests.RequestException as error:
-            raise NozleTransportError(operation) from error
+        # Retry only a request that is safe to repeat: a read, a call with an Idempotency-Key, or a
+        # call the caller marks idempotent. Network errors, timeouts, 429 and 5xx are retried.
+        safe = (
+            method.upper() in ("GET", "HEAD")
+            or idempotent
+            or "Idempotency-Key" in request_headers
+        )
+        retries = self.max_retries if safe else 0
+        attempt = 0
+        while True:
+            response = None
+            try:
+                response = self.session.request(
+                    method=method,
+                    url=f"{self.base_url}{path}",
+                    headers=request_headers,
+                    params=params,
+                    json=json_body,
+                    timeout=self.timeout,
+                )
+            except requests.RequestException as error:
+                if attempt >= retries:
+                    raise NozleTransportError(operation) from error
+            if response is not None and not (
+                response.status_code == 429 or response.status_code >= 500
+            ):
+                break
+            if response is not None and attempt >= retries:
+                break
+            time.sleep(self._delay(attempt, response))
+            attempt += 1
 
+        assert response is not None
         if not 200 <= response.status_code < 300:
             raise NozleAPIError(
                 operation=operation,
@@ -90,6 +118,12 @@ class HttpTransport:
                 status_code=response.status_code,
                 response_details="response was not valid JSON",
             ) from error
+
+    def _delay(self, attempt: int, response: Optional[requests.Response]) -> float:
+        retry_after = _parse_retry_after(response.headers.get("Retry-After")) if response is not None else None
+        if retry_after is not None:
+            return min(retry_after, 30.0)
+        return min(self.retry_delay * 2**attempt, 10.0) * (0.5 + random.random() / 2)
 
     def close(self) -> None:
         if self._owns_session:
