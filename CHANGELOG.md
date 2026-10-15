@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- `usage.track()` reuses the timestamp it filled in when the same idempotency key is sent again on the same client, so a retry no longer fails with 409 `idempotency_key_reused`. The client remembers the last 1000 keys; a retry from another process or after a restart must pass `timestamp`.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added

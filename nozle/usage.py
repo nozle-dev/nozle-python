@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Optional, cast
 
 from nozle._transport import HttpTransport
@@ -18,6 +19,9 @@ class UsageNamespace:
 
     def __init__(self, transport: HttpTransport, api_key: str) -> None:
         self._transport = transport
+        # Timestamps the SDK filled in, by idempotency key, so a retry of the same key sends the same request.
+        # shortcut: lives in this client's memory, so a retry from another process must pass `timestamp`; keeps the last 1000 keys.
+        self._generated_timestamps: OrderedDict[str, str] = OrderedDict()
         self._api_key = api_key
 
     def check(
@@ -67,7 +71,7 @@ class UsageNamespace:
             "customer_id": customer_id,
             "feature_code": feature_code,
             "properties": properties or {},
-            "timestamp": timestamp or utc_now_rfc3339_milliseconds(),
+            "timestamp": timestamp or self._timestamp_for(idempotency_key),
         }
         if entity_id is not None:
             body["entity_id"] = entity_id
@@ -83,6 +87,15 @@ class UsageNamespace:
                 headers={"Idempotency-Key": idempotency_key},
             ),
         )
+
+    def _timestamp_for(self, idempotency_key: str) -> str:
+        known = self._generated_timestamps.get(idempotency_key)
+        if known is None:
+            known = utc_now_rfc3339_milliseconds()
+            self._generated_timestamps[idempotency_key] = known
+            if len(self._generated_timestamps) > 1000:
+                self._generated_timestamps.popitem(last=False)
+        return known
 
     @staticmethod
     def _validate(
