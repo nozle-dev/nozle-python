@@ -63,7 +63,7 @@ class HttpTransport:
                 url=f"{self.base_url}{path}",
                 headers=request_headers,
                 params=params,
-                json=json_body,
+                json=_without_unset(json_body),
                 timeout=self.timeout,
             )
         except requests.RequestException as error:
@@ -119,4 +119,15 @@ def _sanitize(value: Any, api_key: str) -> Any:
         return [_sanitize(item, api_key) for item in value]
     if isinstance(value, str):
         return value.replace(api_key, "[REDACTED]")[:2048]
+    return value
+
+
+def _without_unset(value: Any) -> Any:
+    """Leave out every field set to None, at any depth, so an optional field the caller did not set
+    is not sent and the API applies its default. A request never needs an explicit null: where the
+    API accepts null, leaving the field out means the same thing."""
+    if isinstance(value, Mapping):
+        return {key: _without_unset(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_without_unset(item) for item in value]
     return value

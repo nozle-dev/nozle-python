@@ -103,7 +103,6 @@ def test_bulk_entity_upsert_supports_wire_shape_and_maximum_batch(
     assert len(matcher.last_request.json()["entities"]) == 500
     assert matcher.last_request.json()["entities"][0] == {
         "external_id": "user-0",
-        "name": None,
         "status": "active",
         "metadata": {},
     }

@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- `entity_subscriptions.checkout`, `change_plan`, `checkout_many` and `cancel` leave out optional fields you did not set instead of sending JSON `null`, so the API applies its defaults.
+- Requests leave out every optional field you did not set instead of sending JSON `null`, so the API applies its defaults. This is done once in the transport for every call; it fixes `entity_subscriptions.checkout`, `change_plan`, `checkout_many` and `cancel`, the subscription transition `target_plan_code`, and an Entity upsert without a name (leaving the name out means the same as `null`).
+- A request contract test (`tests/contract/test_request_contract.py`) checks the body of every SDK call against the API request schema: no unknown key, no `null` where it is not allowed, and enum values from the schema. `scripts/sync_openapi_requests.py` refreshes the schemas from `nozle-openapi.yaml`.
 
 ### Added
 
