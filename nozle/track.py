@@ -77,5 +77,6 @@ def track(
         "/api/v1/events",
         json_body={"event": body},
         expect_json=False,
+        idempotent=True,
     )
     return resolved_transaction_id

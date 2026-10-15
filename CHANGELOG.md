@@ -5,8 +5,9 @@
 ### Added
 
 - `api_key` is optional. When it is not passed, `Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and raises `ValueError` if that is not set either. An explicit `api_key` is used as before.
-
 - `host` keyword argument (default `https://api.nozle.app`). It fills in `base_url` (`{host}/engine`) and `events_url` (`{host}/core`) when they are not given. `base_url` and `events_url` keep their meaning and win over `host`.
+- Opt-in retries: `Nozle(max_retries=2, retry_delay=0.5)` (default `max_retries=0`, no retries). Network errors, timeouts, `429` and `5xx` are retried with backoff, or after the `Retry-After` seconds when sent, only for requests that are safe to repeat: reads, calls that carry an `Idempotency-Key` (such as `usage.track`), event, cost event and customer writes, and the read-only `usage.check` and transition preview. `subscribe()`, `checkout()` and other writes without a key are never retried. The `timeout` applies to each attempt.
+- `NozleAPIError.request_id` (the `X-Request-Id` response header, which Core sends and the Engine does not yet) and `NozleAPIError.retry_after` (seconds, from `Retry-After`, as a number or an HTTP date). Both are `None` when the service did not send them. The message is unchanged.
 
 ## 0.12.0 — 2026-10-14
 
