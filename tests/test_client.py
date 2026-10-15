@@ -836,3 +836,21 @@ def test_a_write_is_retried_only_when_it_is_safe_to_repeat(
     with pytest.raises(NozleAPIError):
         client.usage.track("cust", "f", idempotency_key="k1", timestamp="2026-10-15T10:00:00Z")
     assert usage.call_count == 3
+
+
+def test_usage_track_reuses_its_timestamp_for_a_retry_of_the_same_key(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = iter(f"2026-10-15T10:00:0{i}.000Z" for i in range(9))
+    monkeypatch.setattr("nozle.usage.utc_now_rfc3339_milliseconds", lambda: next(clock))
+    matcher = requests_mock.post("https://api.example/engine/api/v1/usage/track", json={})
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    for key in ("k1", "k1", "k2"):
+        client.usage.track("cust", "emails", idempotency_key=key)
+    client.usage.track("cust", "emails", idempotency_key="k3", timestamp="2026-01-01T00:00:00Z")
+
+    stamps = [call.json()["timestamp"] for call in matcher.request_history]
+    assert stamps[0] == stamps[1]
+    assert stamps[2] != stamps[0]
+    assert stamps[3] == "2026-01-01T00:00:00Z"
