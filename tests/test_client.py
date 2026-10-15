@@ -703,3 +703,14 @@ def test_structured_api_error_is_safe_and_mutations_are_not_retried(
     assert error.response_details["api_key"] == "[REDACTED]"
     assert api_key not in str(error)
     assert matcher.call_count == 1
+
+
+def test_host_derives_both_service_urls_and_explicit_urls_win():
+    client = Nozle("sk_test", host="http://localhost:8888//")
+    assert client.base_url == "http://localhost:8888/engine"
+    assert client.events_url == "http://localhost:8888/core"
+
+    client = Nozle("sk_test", events_url="https://core.example/", host="http://localhost:8888")
+    assert client.base_url == "http://localhost:8888/engine"
+    assert client.events_url == "https://core.example"
+    assert Nozle("sk_test").base_url == "https://api.nozle.app/engine"

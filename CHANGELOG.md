@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `host` keyword argument (default `https://api.nozle.app`). It fills in `base_url` (`{host}/engine`) and `events_url` (`{host}/core`) when they are not given. `base_url` and `events_url` keep their meaning and win over `host`.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added

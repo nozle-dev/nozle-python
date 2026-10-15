@@ -55,15 +55,18 @@ class Nozle:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://api.nozle.app/engine",
-        events_url: str = "https://api.nozle.app/core",
+        base_url: Optional[str] = None,
+        events_url: Optional[str] = None,
         timeout: float = 10,
         *,
+        host: str = "https://api.nozle.app",
         _session: Optional[requests.Session] = None,
     ) -> None:
         self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
-        self.events_url = events_url.rstrip("/")
+        # host fills in whichever of base_url (Engine) and events_url (Core) is not given.
+        host = host.rstrip("/")
+        self.base_url = (base_url or f"{host}/engine").rstrip("/")
+        self.events_url = (events_url or f"{host}/core").rstrip("/")
         self.timeout = timeout
         self._session = _session or requests.Session()
         self._owns_session = _session is None
