@@ -29,9 +29,11 @@ dependencies = ["requests>=2.28"]
 [project.optional-dependencies]
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.30.0"]
-all = ["openai>=1.0", "anthropic>=0.30.0"]
+httpx = ["httpx>=0.24"]
+all = ["openai>=1.0", "anthropic>=0.30.0", "httpx>=0.24"]
 dev = [
     "build>=1.2",
+    "httpx>=0.24",
     "mypy>=1.11,<1.19",
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
@@ -62,6 +64,11 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_return_any = true
 warn_unused_ignores = true
+
+# httpx (optional extra) pulls in anyio, which needs Python 3.10 syntax; type-check only its API.
+[[tool.mypy.overrides]]
+module = ["anyio", "anyio.*"]
+follow_imports = "skip"
 
 [tool.ruff]
 target-version = "py39"
