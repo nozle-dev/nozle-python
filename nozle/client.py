@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import warnings
 from datetime import datetime
@@ -54,7 +55,7 @@ class Nozle:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         events_url: Optional[str] = None,
         timeout: float = 10,
@@ -62,6 +63,10 @@ class Nozle:
         host: str = "https://api.nozle.app",
         _session: Optional[requests.Session] = None,
     ) -> None:
+        if api_key is None:
+            api_key = os.environ.get("NOZLE_SECRET_KEY")
+        if api_key is None:
+            raise ValueError("Nozle: pass api_key or set the NOZLE_SECRET_KEY environment variable")
         self.api_key = api_key
         # host fills in whichever of base_url (Engine) and events_url (Core) is not given.
         host = host.rstrip("/")

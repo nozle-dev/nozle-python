@@ -714,3 +714,12 @@ def test_host_derives_both_service_urls_and_explicit_urls_win():
     assert client.base_url == "http://localhost:8888/engine"
     assert client.events_url == "https://core.example"
     assert Nozle("sk_test").base_url == "https://api.nozle.app/engine"
+
+
+def test_api_key_falls_back_to_environment(monkeypatch):
+    monkeypatch.setenv("NOZLE_SECRET_KEY", "sk_env")
+    assert Nozle().api_key == "sk_env"
+    assert Nozle("sk_explicit").api_key == "sk_explicit"
+    monkeypatch.delenv("NOZLE_SECRET_KEY")
+    with pytest.raises(ValueError, match="NOZLE_SECRET_KEY"):
+        Nozle()
