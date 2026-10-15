@@ -313,11 +313,11 @@ def test_openai_wrapper_links_detailed_cost_events_to_feature_event() -> None:
 
     assert provider.chat.completions.create(model="gpt-test") is response
     tracker.track.assert_called_once()
-    assert tracker.track.call_args.kwargs["transaction_id"] == "txn_123"
+    assert tracker.track.call_args.kwargs["transaction_id"] == "llm-openai-openai_request_1"
     assert tracker.track.call_args.kwargs["metadata"]["provider"] == "openai"
     assert tracker.cost_events.track.call_count == 3
     first_cost = tracker.cost_events.track.call_args_list[0].kwargs
-    assert first_cost["parent_transaction_id"] == "txn_123"
+    assert first_cost["parent_transaction_id"] == "llm-openai-openai_request_1"
     assert first_cost["request_id"] == "openai_request_1"
     assert first_cost["operation_key"] == "input"
     assert first_cost["properties"] == {

@@ -530,6 +530,95 @@ class Nozle:
         payload.update({key: value for key, value in optional_values.items() if value is not None})
         return payload
 
+    def wrap_http_client(self, client: Any, **options: Any) -> Any:
+        """Make an existing httpx or httpx2 client record the token usage of every LLM response.
+
+        Pass the client your LLM SDK takes as ``http_client``, for example
+        ``anthropic.DefaultHttpxClient()``. See :func:`nozle.integrations.capture.wrap_http_client`.
+        """
+        from nozle.integrations.capture import wrap_http_client
+
+        return wrap_http_client(client, self, **options)
+
+    def capture_http_client(self, **options: Any) -> Any:
+        """Return a new httpx client that records LLM token usage (``module="httpx2"`` for httpx2).
+
+        See :func:`nozle.integrations.capture.capture_http_client`.
+        """
+        from nozle.integrations.capture import capture_http_client
+
+        return capture_http_client(self, **options)
+
+    def capture_async_http_client(self, **options: Any) -> Any:
+        """The async form of :meth:`capture_http_client`."""
+        from nozle.integrations.capture import capture_async_http_client
+
+        return capture_async_http_client(self, **options)
+
+    def record_usage(
+        self,
+        customer_id: str,
+        *,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cached_input_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        feature_code: str = "llm_tokens",
+        provider: str = "",
+        request_id: Optional[str] = None,
+        latency_ms: int = 0,
+        feature: Optional[str] = None,
+        cost_meter_code: Optional[str] = None,
+    ) -> None:
+        """Record one LLM call's token usage that your code read itself.
+
+        ``input_tokens`` counts all input, including cached input and cache writes;
+        ``output_tokens`` counts all output, including reasoning. Recording the same
+        ``request_id`` twice records one event. Raises the first delivery error.
+        """
+        from nozle.integrations._common import (
+            ProviderTokenUsage,
+            capture_provider_usage,
+            compact_categories,
+            token_count,
+        )
+
+        require_non_empty(customer_id, "customer_id", "record_usage")
+        total_input = token_count(input_tokens)
+        total_output = token_count(output_tokens)
+        cached = min(total_input, token_count(cached_input_tokens))
+        cache_write = min(total_input - cached, token_count(cache_write_tokens))
+        reasoning = min(total_output, token_count(reasoning_tokens))
+        usage = ProviderTokenUsage(
+            feature_input_tokens=total_input,
+            feature_output_tokens=total_output,
+            categories=compact_categories(
+                (
+                    ("input", total_input - cached - cache_write),
+                    ("cached_input", cached),
+                    ("cache_write", cache_write),
+                    ("output", total_output - reasoning),
+                    ("reasoning", reasoning),
+                )
+            ),
+        )
+        errors = capture_provider_usage(
+            self,
+            customer_id,
+            feature_code,
+            feature=feature,
+            cost_meter_code=cost_meter_code,
+            provider=provider,
+            model=model,
+            request_id=request_id,
+            usage=usage,
+            latency_ms=token_count(latency_ms),
+        )
+        if errors:
+            raise errors[0]
+
     def ping(self) -> PingResult:
         require_secret_key(self.api_key, "ping")
         return cast(PingResult, self._engine.request("ping", "GET", "/api/v1/ping"))

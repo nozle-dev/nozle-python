@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Usage capture for any LLM client built on httpx or httpx2. `nozle.wrap_http_client(client, customer_id=...)` makes the client your SDK takes as `http_client` (for example `openai.DefaultHttpxClient()` or `anthropic.DefaultHttpxClient()`) record the token usage of every successful LLM response; `nozle.capture_http_client(...)` and `capture_async_http_client(...)` build a new client the same way. Usage is recognised by the response shape: OpenAI-compatible `usage` (any OpenAI-compatible API, including the Responses API), Anthropic `usage` and Gemini `usageMetadata`, for JSON responses and streams. Chat completion streams are asked for usage (`stream_options.include_usage`; `include_stream_usage=False` turns it off). The customer comes from `customer_id` (a string or a function per request) or the `X-Nozle-Customer-Id` request header, which is not sent to the provider. Recording runs in a background thread and never changes or fails the provider response; failures go to `on_error` or a `NozleTrackingWarning`. Install with `pip install 'nozle-sdk[httpx]'`.
+- `nozle.record_usage(customer_id, model=..., input_tokens=..., output_tokens=...)` records usage your code read itself, and raises if it could not be recorded.
+
+### Changed
+
+- Usage events recorded by `wrap_openai`, `wrap_anthropic` and the new capture use the provider's response id as the transaction id (`llm-<format>-<id>`) when there is one, so the same response is never recorded twice. Events also carry `provider_host` when known.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added

@@ -103,6 +103,103 @@ def normalize_anthropic_usage(usage: Any) -> ProviderTokenUsage:
     )
 
 
+def normalize_gemini_usage(usage: Any) -> ProviderTokenUsage:
+    prompt = token_count(value(usage, "promptTokenCount", 0))
+    cached_input = min(prompt, token_count(value(usage, "cachedContentTokenCount", 0)))
+    output = token_count(value(usage, "candidatesTokenCount", 0))
+    reasoning = token_count(value(usage, "thoughtsTokenCount", 0))
+
+    return ProviderTokenUsage(
+        feature_input_tokens=prompt,
+        feature_output_tokens=output + reasoning,
+        categories=compact_categories(
+            (
+                ("input", prompt - cached_input),
+                ("cached_input", cached_input),
+                ("output", output),
+                ("reasoning", reasoning),
+            )
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class DetectedUsage:
+    """Token usage found in one provider response, with the response's own id and model."""
+
+    format: str
+    usage: ProviderTokenUsage
+    id: Optional[str] = None
+    model: Optional[str] = None
+
+
+def detect_usage(body: Any) -> Optional[DetectedUsage]:
+    """Recognise token usage by the shape of a provider response, not by provider name.
+
+    An OpenAI-style ``usage`` (``prompt_tokens``, or ``input_tokens`` from the Responses API),
+    an Anthropic ``usage`` (a ``message`` object or cache token fields), or Gemini
+    ``usageMetadata``. Returns None when the body carries no usage.
+    """
+    if not isinstance(body, Mapping):
+        return None
+    response_id = body.get("id") or body.get("responseId")
+    model = body.get("model") or body.get("modelVersion")
+    response_id = response_id if isinstance(response_id, str) else None
+    model = model if isinstance(model, str) else None
+    metadata = body.get("usageMetadata")
+    if isinstance(metadata, Mapping):
+        return DetectedUsage("gemini", normalize_gemini_usage(metadata), response_id, model)
+    usage = body.get("usage")
+    if not isinstance(usage, Mapping):
+        return None
+    if (
+        body.get("type") == "message"
+        or "cache_read_input_tokens" in usage
+        or "cache_creation_input_tokens" in usage
+    ):
+        return DetectedUsage("anthropic", normalize_anthropic_usage(usage), response_id, model)
+    if any(
+        key in usage
+        for key in ("prompt_tokens", "completion_tokens", "input_tokens", "output_tokens")
+    ):
+        return DetectedUsage("openai", normalize_openai_usage(usage), response_id, model)
+    return None
+
+
+class StreamUsageCollector:
+    """Fold the events of a server-sent stream into the final usage.
+
+    OpenAI sends usage in the last chunk, the Responses API in ``response.completed``,
+    Anthropic in ``message_start`` and then a cumulative ``message_delta``, and Gemini in every
+    chunk with the totals last.
+    """
+
+    def __init__(self) -> None:
+        self._body: Dict[str, Any] = {}
+
+    def add(self, event: Any) -> None:
+        if not isinstance(event, Mapping):
+            return
+        source = event.get("response") or event.get("message") or event
+        if not isinstance(source, Mapping):
+            return
+        for key in ("id", "responseId", "model", "modelVersion"):
+            if source.get(key) is not None:
+                self._body[key] = source[key]
+        if event.get("message") is not None:
+            self._body["type"] = "message"
+        usage = source.get("usage") or event.get("usage")
+        if isinstance(usage, Mapping):
+            merged = dict(self._body.get("usage") or {})
+            merged.update({key: item for key, item in usage.items() if item is not None})
+            self._body["usage"] = merged
+        if isinstance(source.get("usageMetadata"), Mapping):
+            self._body["usageMetadata"] = source["usageMetadata"]
+
+    def result(self) -> Optional[DetectedUsage]:
+        return detect_usage(self._body)
+
+
 def safe_capture_provider_usage(
     nozle: Any,
     customer_id: str,
@@ -115,7 +212,40 @@ def safe_capture_provider_usage(
     request_id: Any,
     usage: ProviderTokenUsage,
     latency_ms: int,
+    provider_host: Optional[str] = None,
 ) -> None:
+    for error in capture_provider_usage(
+        nozle,
+        customer_id,
+        feature_code,
+        feature=feature,
+        cost_meter_code=cost_meter_code,
+        provider=provider,
+        model=model,
+        request_id=request_id,
+        usage=usage,
+        latency_ms=latency_ms,
+        provider_host=provider_host,
+    ):
+        warn_tracking_failure(error)
+
+
+def capture_provider_usage(
+    nozle: Any,
+    customer_id: str,
+    feature_code: str,
+    *,
+    feature: Optional[str],
+    cost_meter_code: Optional[str],
+    provider: str,
+    model: Any,
+    request_id: Any,
+    usage: ProviderTokenUsage,
+    latency_ms: int,
+    provider_host: Optional[str] = None,
+) -> list[Exception]:
+    """Record one usage event and its cost events; return the delivery errors instead of raising."""
+    errors: list[Exception] = []
     properties = tracking_properties(
         provider=provider,
         model=model,
@@ -124,11 +254,22 @@ def safe_capture_provider_usage(
         latency_ms=latency_ms,
         feature=feature,
     )
-    if not cost_meter_code:
-        safe_track(nozle, customer_id, feature_code, properties)
-        return
+    if not provider:
+        properties.pop("provider")
+    if provider_host:
+        properties["provider_host"] = provider_host
 
-    transaction_id = nozle.events.create_transaction_id()
+    if not request_id and not cost_meter_code:
+        try:
+            nozle.track(customer_id, feature_code, metadata=properties)
+        except Exception as error:  # tracking must not corrupt a successful provider response
+            errors.append(error)
+        return errors
+
+    # A stable event id from the provider's response id means a repeat is never billed twice.
+    transaction_id = (
+        f"llm-{provider}-{request_id}" if request_id else nozle.events.create_transaction_id()
+    )
     occurred_at = datetime.now(timezone.utc)
     try:
         nozle.track(
@@ -139,7 +280,9 @@ def safe_capture_provider_usage(
             timestamp=occurred_at.isoformat(),
         )
     except Exception as error:  # tracking must not corrupt a successful provider response
-        warn_tracking_failure(error)
+        errors.append(error)
+    if not cost_meter_code:
+        return errors
 
     resolved_model = str(model or "")
     resolved_request_id = str(request_id) if request_id else None
@@ -159,7 +302,8 @@ def safe_capture_provider_usage(
                 timestamp=occurred_at.timestamp(),
             )
         except Exception as error:  # tracking must not corrupt a successful provider response
-            warn_tracking_failure(error)
+            errors.append(error)
+    return errors
 
 
 async def safe_capture_provider_usage_async(
