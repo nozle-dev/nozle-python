@@ -25,7 +25,10 @@ _SENSITIVE_KEYS = {
 
 
 class HttpTransport:
-    """Shared requests transport used by all SDK namespaces. It never retries unless ``max_retries`` is set."""
+    """Shared requests transport used by all SDK namespaces.
+
+    It never retries unless ``max_retries`` is set.
+    """
 
     def __init__(
         self,
@@ -120,10 +123,12 @@ class HttpTransport:
             ) from error
 
     def _delay(self, attempt: int, response: Optional[requests.Response]) -> float:
-        retry_after = _parse_retry_after(response.headers.get("Retry-After")) if response is not None else None
+        header = response.headers.get("Retry-After") if response is not None else None
+        retry_after = _parse_retry_after(header)
         if retry_after is not None:
             return min(retry_after, 30.0)
-        return min(self.retry_delay * 2**attempt, 10.0) * (0.5 + random.random() / 2)
+        backoff: float = min(self.retry_delay * 2**attempt, 10.0)
+        return backoff * (0.5 + random.random() / 2)
 
     def close(self) -> None:
         if self._owns_session:
