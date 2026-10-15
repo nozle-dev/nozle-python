@@ -92,6 +92,7 @@ def test_entity_subscription_cancel_and_local_validation(
     )
     assert result["subscription_transition"]["replayed"] is False
     assert requests_mock.last_request.headers["Idempotency-Key"] == "cancel-user-42"
+    assert requests_mock.last_request.json() == {"timing": "end_of_period"}
 
     with pytest.raises(NozleValidationError, match="billing_time"):
         namespace.checkout("workspace", "user-42", plan_code="pro", billing_time="weekly")
@@ -167,3 +168,27 @@ def test_bulk_entity_subscription_checkout_validates_before_network(
             items=[{"external_entity_id": "seat-1", "plan_code": "pro"}],
         )
     assert not requests_mock.called
+
+
+def test_unset_optional_fields_are_left_out(requests_mock: requests_mock.Mocker) -> None:
+    base = "https://api.example/core/api/v1/customers/workspace"
+    change = requests_mock.post(f"{base}/entities/user-42/subscription/change-plan", json={"type": "completed"})
+    batch = requests_mock.post(
+        f"{base}/entity-subscriptions/checkout",
+        json={"entity_subscription_checkout": {"id": "batch-1"}},
+    )
+    namespace = Nozle("sk_test", events_url="https://api.example/core").entity_subscriptions
+
+    namespace.change_plan("workspace", "user-42", plan_code="team")
+    assert change.last_request.json() == {"plan_code": "team"}
+    namespace.change_plan("workspace", "user-42", plan_code="team", billing_time="calendar")
+    assert change.last_request.json() == {"plan_code": "team", "billing_time": "calendar"}
+    namespace.checkout_many(
+        "workspace",
+        items=[{"external_entity_id": "user-42", "plan_code": "pro"}],
+        idempotency_key="batch-1",
+    )
+    assert batch.last_request.json() == {
+        "entity_subscription_checkout": {"items": [{"external_entity_id": "user-42", "plan_code": "pro"}]}
+    }
+

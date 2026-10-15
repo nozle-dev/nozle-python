@@ -9,6 +9,7 @@
 - Opt-in retries: `Nozle(max_retries=2, retry_delay=0.5)` (default `max_retries=0`, no retries). Network errors, timeouts, `429` and `5xx` are retried with backoff, or after the `Retry-After` seconds when sent, only for requests that are safe to repeat: reads, calls that carry an `Idempotency-Key` (such as `usage.track`), event, cost event and customer writes, and the read-only `usage.check` and transition preview. `subscribe()`, `checkout()` and other writes without a key are never retried. The `timeout` applies to each attempt.
 - `NozleAPIError.request_id` (the `X-Request-Id` response header, which Core sends and the Engine does not yet) and `NozleAPIError.retry_after` (seconds, from `Retry-After`, as a number or an HTTP date). Both are `None` when the service did not send them. The message is unchanged.
 - A contract test: `tests/contract` checks that each SDK response type declares only keys the API schema has and requires only keys the schema requires. `scripts/sync_openapi_contract.py` refreshes the schemas from `nozle-openapi.yaml`.
+- `entity_subscriptions.change_plan` accepts `billing_time`, which the API already reads.
 
 ### Removed
 
@@ -17,6 +18,8 @@
 ### Fixed
 
 - `usage.track()` reuses the timestamp it filled in when the same idempotency key is sent again on the same client, so a retry no longer fails with 409 `idempotency_key_reused`. The client remembers the last 1000 keys; a retry from another process or after a restart must pass `timestamp`.
+- Requests leave out every optional field you did not set instead of sending JSON `null`, so the API applies its defaults. This is done once in the transport for every call; it fixes `entity_subscriptions.checkout`, `change_plan`, `checkout_many` and `cancel`, the subscription transition `target_plan_code`, and an Entity upsert without a name (leaving the name out means the same as `null`).
+- A request contract test (`tests/contract/test_request_contract.py`) checks the body of every SDK call against the API request schema: no unknown key, no `null` where it is not allowed, and enum values from the schema. `scripts/sync_openapi_requests.py` refreshes the schemas from `nozle-openapi.yaml`.
 
 ## 0.12.0 — 2026-10-14
 

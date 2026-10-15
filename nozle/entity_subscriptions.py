@@ -143,6 +143,7 @@ class EntitySubscriptionsNamespace:
         *,
         plan_code: str,
         return_url: str | None = None,
+        billing_time: str | None = None,
         idempotency_key: str | None = None,
     ) -> CheckoutResult:
         return self._change(
@@ -151,6 +152,7 @@ class EntitySubscriptionsNamespace:
             entity_id,
             plan_code=plan_code,
             return_url=return_url,
+            billing_time=billing_time,
             idempotency_key=idempotency_key,
         )
 
@@ -225,11 +227,7 @@ class EntitySubscriptionsNamespace:
                     "plan_code": plan_code,
                     "return_url": return_url,
                     "billing_time": billing_time,
-                    **(
-                        {"register_mandate": register_mandate}
-                        if register_mandate is not None
-                        else {}
-                    ),
+                    "register_mandate": register_mandate,
                 },
                 headers=headers,
             ),

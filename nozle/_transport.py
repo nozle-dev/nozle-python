@@ -74,6 +74,7 @@ class HttpTransport:
             or "Idempotency-Key" in request_headers
         )
         retries = self.max_retries if safe else 0
+        body = _without_unset(json_body)
         attempt = 0
         while True:
             response = None
@@ -83,7 +84,7 @@ class HttpTransport:
                     url=f"{self.base_url}{path}",
                     headers=request_headers,
                     params=params,
-                    json=json_body,
+                    json=body,
                     timeout=self.timeout,
                 )
             except requests.RequestException as error:
@@ -175,3 +176,14 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
             moment = moment.replace(tzinfo=timezone.utc)
         return max(0.0, (moment - datetime.now(timezone.utc)).total_seconds())
     return seconds if seconds >= 0 else None
+
+
+def _without_unset(value: Any) -> Any:
+    """Leave out every field set to None, at any depth, so an optional field the caller did not set
+    is not sent and the API applies its default. A request never needs an explicit null: where the
+    API accepts null, leaving the field out means the same thing."""
+    if isinstance(value, Mapping):
+        return {key: _without_unset(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_without_unset(item) for item in value]
+    return value
