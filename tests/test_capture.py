@@ -337,3 +337,70 @@ def test_stream_closed_at_done_still_records_usage() -> None:
 
     wait_for(nozle.track)
     assert nozle.track.call_args.kwargs["transaction_id"] == "llm-openai-c6"
+
+
+class _Lookup:
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.calls: list[str] = []
+
+    def request(self, operation: str, method: str, path: str, **_: object) -> object:
+        from nozle.errors import NozleAPIError
+
+        self.calls.append(path)
+        if self.status >= 400:
+            raise NozleAPIError(operation=operation, status_code=self.status)
+        return {}
+
+
+class _Client:
+    """A stand-in client that can be weakly referenced, like the real one."""
+
+    def __init__(self, status: int) -> None:
+        self.events = SimpleNamespace(create_transaction_id=Mock(return_value="t"))
+        self.track = Mock(return_value="txn")
+        self.cost_events = SimpleNamespace(track=Mock())
+        self._events = _Lookup(status)
+
+
+def test_missing_feature_is_reported_once_per_client_and_code() -> None:
+    nozle = _Client(404)
+    errors: list[Exception] = []
+    transport = httpx.MockTransport(
+        lambda r: httpx.Response(
+            200,
+            json={"id": f"c{len(errors)}", "usage": {"prompt_tokens": 1, "completion_tokens": 1}},
+        )
+    )
+    client = capture_http_client(
+        nozle, customer_id="cust_1", on_error=errors.append, transport=transport
+    )
+    client.post("https://api.openai.com/v1/chat/completions", json={})
+    client.post("https://api.openai.com/v1/chat/completions", json={})
+
+    import time
+
+    for _ in range(200):
+        if nozle.track.call_count == 2 and errors:
+            break
+        time.sleep(0.005)
+    assert nozle.track.call_count == 2
+    assert len(errors) == 1 and getattr(errors[0], "code", None) == "feature_not_found"
+    assert nozle._events.calls == ["/api/v1/features/llm_tokens"]
+
+
+def test_existing_feature_or_failed_check_stays_silent() -> None:
+    for status in (200, 403, 500):
+        nozle = _Client(status)
+        errors: list[Exception] = []
+        transport = httpx.MockTransport(
+            lambda r: httpx.Response(200, json={"id": "c", "usage": {"prompt_tokens": 1}})
+        )
+        capture_http_client(
+            nozle, customer_id="c", on_error=errors.append, transport=transport
+        ).post("https://x/v1/chat/completions", json={})
+        wait_for(nozle.track)
+        import time
+
+        time.sleep(0.05)
+        assert errors == []

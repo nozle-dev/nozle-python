@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import warnings
+import weakref
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
+from urllib.parse import quote
 
 
 class NozleTrackingWarning(RuntimeWarning):
@@ -365,3 +368,44 @@ def warn_tracking_failure(error: Exception) -> None:
         # Warning filters may promote warnings to exceptions; tracking still
         # must not replace a successful provider response.
         pass
+
+
+_checked_features: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
+_checked_lock = threading.Lock()
+
+
+def check_feature_once(nozle: Any, feature_code: str) -> Optional[Exception]:
+    """Return an error once per client and event code when no Feature has that code.
+
+    The usage is then stored but never billed. Reads Core's ``GET /features/{code}``; any other
+    answer, including a key without read permission, returns None.
+    """
+    transport = getattr(nozle, "_events", None)
+    if transport is None:
+        return None
+    try:
+        with _checked_lock:
+            seen = _checked_features.setdefault(nozle, set())
+            if feature_code in seen:
+                return None
+            seen.add(feature_code)
+    except TypeError:  # an object that cannot be weakly referenced is not a real client
+        return None
+    from nozle.errors import NozleAPIError
+
+    try:
+        transport.request(
+            "feature lookup", "GET", f"/api/v1/features/{quote(feature_code, safe='')}"
+        )
+    except NozleAPIError as error:
+        if error.status_code == 404:
+            setup_error = LookupError(
+                f'No Feature has the code "{feature_code}", so this usage is stored but not '
+                "billed. Create a metered Feature with that code: "
+                "https://docs.nozle.dev/guides/ai/token-billing"
+            )
+            setup_error.code = "feature_not_found"  # type: ignore[attr-defined]
+            return setup_error
+    except Exception:  # a failed check never affects recording
+        return None
+    return None
