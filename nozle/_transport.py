@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Mapping, Optional, Union
 
 import requests
@@ -74,6 +76,8 @@ class HttpTransport:
                 operation=operation,
                 status_code=response.status_code,
                 response_details=self._safe_response_details(response),
+                request_id=response.headers.get("X-Request-Id") or None,
+                retry_after=_parse_retry_after(response.headers.get("Retry-After")),
             )
 
         if not expect_json or response.status_code == 204 or not response.content:
@@ -120,3 +124,20 @@ def _sanitize(value: Any, api_key: str) -> Any:
     if isinstance(value, str):
         return value.replace(api_key, "[REDACTED]")[:2048]
     return value
+
+
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    """Seconds from a ``Retry-After`` header that holds a number or an HTTP date."""
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            moment = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return max(0.0, (moment - datetime.now(timezone.utc)).total_seconds())
+    return seconds if seconds >= 0 else None

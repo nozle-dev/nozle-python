@@ -703,3 +703,40 @@ def test_structured_api_error_is_safe_and_mutations_are_not_retried(
     assert error.response_details["api_key"] == "[REDACTED]"
     assert api_key not in str(error)
     assert matcher.call_count == 1
+
+
+def test_api_error_carries_request_id_and_retry_after(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.get(
+        "https://api.example/engine/api/v1/plans",
+        status_code=503,
+        json={},
+        headers={"X-Request-Id": "req-1", "Retry-After": "30"},
+    )
+    with pytest.raises(NozleAPIError) as raised:
+        Nozle("sk_test", base_url="https://api.example/engine").plans()
+    assert raised.value.request_id == "req-1"
+    assert raised.value.retry_after == 30
+
+
+def test_retry_after_accepts_a_date_and_ignores_a_bad_value(requests_mock: requests_mock.Mocker) -> None:
+    from email.utils import format_datetime
+    from datetime import datetime, timedelta, timezone
+
+    soon = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=20), usegmt=True)
+    url = "https://api.example/engine/api/v1/plans"
+    requests_mock.get(url, [
+        {"status_code": 429, "json": {}, "headers": {"Retry-After": soon}},
+        {"status_code": 429, "json": {}, "headers": {"Retry-After": "soon"}},
+        {"status_code": 429, "json": {}},
+    ])
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    with pytest.raises(NozleAPIError) as dated:
+        client.plans()
+    assert 0 < dated.value.retry_after <= 20
+    with pytest.raises(NozleAPIError) as bad:
+        client.plans()
+    assert bad.value.retry_after is None
+    with pytest.raises(NozleAPIError) as missing:
+        client.plans()
+    assert missing.value.request_id is None and missing.value.retry_after is None
+

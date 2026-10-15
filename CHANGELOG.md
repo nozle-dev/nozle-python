@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `NozleAPIError.request_id` (the `X-Request-Id` response header, which Core sends and the Engine does not yet) and `NozleAPIError.retry_after` (seconds, from `Retry-After`, as a number or an HTTP date). Both are `None` when the service did not send them. The message is unchanged.
+
 ## 0.12.0 — 2026-10-14
 
 ### Added
