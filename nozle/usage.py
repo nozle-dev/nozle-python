@@ -19,7 +19,7 @@ class UsageNamespace:
 
     def __init__(self, transport: HttpTransport, api_key: str) -> None:
         self._transport = transport
-        # Timestamps the SDK filled in, by idempotency key, so a retry of the same key sends the same request.
+        # Timestamps the SDK filled in, by idempotency key, so a retry of a key sends the same request.
         # shortcut: lives in this client's memory, so a retry from another process must pass `timestamp`; keeps the last 1000 keys.
         self._generated_timestamps: OrderedDict[str, str] = OrderedDict()
         self._api_key = api_key
