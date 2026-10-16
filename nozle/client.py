@@ -48,6 +48,7 @@ from nozle.types import (
     WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
+from nozle.webhooks import WebhooksNamespace
 
 
 class Nozle:
@@ -104,6 +105,7 @@ class Nozle:
         self.entities = EntitiesNamespace(self._engine, self.api_key)
         self.entity_subscriptions = EntitySubscriptionsNamespace(self._events, self.api_key)
         self.usage = UsageNamespace(self._engine, self.api_key)
+        self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
     def track(

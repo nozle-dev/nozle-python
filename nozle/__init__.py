@@ -93,8 +93,12 @@ from nozle.types import (
     WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
+from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "NozleWebhookEvent",
+    "WebhooksNamespace",
+    "WebhookVerificationError",
     "CancellationPolicy",
     "CancelSubscriptionResult",
     "CanResult",
