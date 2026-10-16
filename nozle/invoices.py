@@ -1,8 +1,8 @@
-"""A customer's invoices, their PDFs and a preview of the next one."""
+"""A customer's invoices and their PDFs."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, cast
+from typing import Any, Dict, Mapping, Optional, cast
 
 from nozle._transport import HttpTransport
 from nozle._validation import path_segment, require_non_empty, require_secret_key
@@ -70,35 +70,6 @@ class InvoicesNamespace:
             return None
         invoice = payload.get("invoice")
         return invoice.get("file_url") if isinstance(invoice, Mapping) else None
-
-    def preview(
-        self,
-        customer_id: str,
-        *,
-        subscription_ids: Optional[List[str]] = None,
-        plan_code: Optional[str] = None,
-        billing_time: Optional[str] = None,
-    ) -> Invoice:
-        """What the next invoice of ``subscription_ids`` would be, or the first invoice of a new
-        subscription to ``plan_code``. Computed now and not saved."""
-        operation = "invoices.preview"
-        require_secret_key(self._api_key, operation)
-        require_non_empty(customer_id, "customer_id", operation)
-        if not subscription_ids and not plan_code:
-            raise ValueError("invoices.preview requires subscription_ids or plan_code")
-        body: Dict[str, Any] = {"customer": {"external_id": customer_id}}
-        if subscription_ids:
-            body["subscriptions"] = {"external_ids": subscription_ids}
-            if plan_code:
-                body["subscriptions"]["plan_code"] = plan_code
-        else:
-            body["plan_code"] = plan_code
-            if billing_time:
-                body["billing_time"] = billing_time
-        payload = self._transport.request(
-            operation, "POST", "/api/v1/invoices/preview", json_body=body, idempotent=True
-        )
-        return cast(Invoice, _object(operation, payload)["invoice"])
 
 
 def _object(operation: str, payload: Any) -> Mapping[str, Any]:

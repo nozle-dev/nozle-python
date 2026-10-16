@@ -32,23 +32,6 @@ def test_download_url_or_none_while_generating(requests_mock: requests_mock.Mock
     assert client().invoices.download_url("inv_2") is None
 
 
-def test_preview_bodies(requests_mock: requests_mock.Mocker) -> None:
-    route = requests_mock.post(f"{CORE}/invoices/preview", json={"invoice": INVOICE})
-    client().invoices.preview("cus_1", subscription_ids=["sub_1"])
-    assert route.last_request.json() == {
-        "customer": {"external_id": "cus_1"},
-        "subscriptions": {"external_ids": ["sub_1"]},
-    }
-    client().invoices.preview("cus_1", plan_code="pro", billing_time="anniversary")
-    assert route.last_request.json() == {
-        "customer": {"external_id": "cus_1"},
-        "plan_code": "pro",
-        "billing_time": "anniversary",
-    }
-    with pytest.raises(ValueError):
-        client().invoices.preview("cus_1")
-
-
 def test_get_and_secret_key(requests_mock: requests_mock.Mocker) -> None:
     requests_mock.get(f"{CORE}/invoices/inv_1", json={"invoice": INVOICE})
     assert client().invoices.get("inv_1")["nozle_id"] == "inv_1"
