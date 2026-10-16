@@ -796,3 +796,31 @@ class Invoice(_InvoiceRequired, total=False):
 class InvoicePage(TypedDict):
     invoices: List[Invoice]
     meta: Dict[str, Any]
+
+
+class AlertThreshold(TypedDict):
+    code: Optional[str]
+    value: str
+    recurring: bool
+
+
+class Alert(TypedDict, total=False):
+    """A usage or wallet-balance alert."""
+
+    nozle_id: str
+    alert_type: str
+    code: str
+    name: Optional[str]
+    external_subscription_id: Optional[str]
+    wallet_code: Optional[str]
+    direction: str
+    previous_value: Any
+    last_processed_at: Optional[str]
+    thresholds: List[AlertThreshold]
+    feature: Optional[Dict[str, Any]]
+    created_at: str
+
+
+class AlertPage(TypedDict):
+    alerts: List[Alert]
+    meta: Dict[str, Any]

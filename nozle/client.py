@@ -17,6 +17,7 @@ from nozle._validation import (
     require_secret_key,
     validate_idempotency_key,
 )
+from nozle.alerts import AlertsNamespace
 from nozle.can import can as _can
 from nozle.cost_events import CostEventsNamespace
 from nozle.credit_systems import CreditSystemsNamespace
@@ -111,6 +112,7 @@ class Nozle:
         self.usage = UsageNamespace(self._engine, self.api_key)
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
+        self.alerts = AlertsNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
     def track(

@@ -1,4 +1,5 @@
 from nozle._version import __version__
+from nozle.alerts import AlertsNamespace
 from nozle.client import Nozle
 from nozle.cost_events import CostEventsNamespace
 from nozle.credit_systems import CreditSystemsNamespace
@@ -20,6 +21,8 @@ from nozle.integrations.openai import wrap_openai
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.types import (
+    Alert,
+    AlertPage,
     CancellationPolicy,
     CancelSubscriptionResult,
     CanResult,
@@ -101,6 +104,9 @@ from nozle.usage import UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "Alert",
+    "AlertPage",
+    "AlertsNamespace",
     "Invoice",
     "InvoicePage",
     "InvoicesNamespace",
