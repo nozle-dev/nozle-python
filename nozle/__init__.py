@@ -44,7 +44,9 @@ from nozle.types import (
     CustomerEntityPage,
     CustomerEntityStatus,
     CustomerEntityUpsertData,
+    CustomerProjectedUsage,
     CustomerUpsertResult,
+    CustomerUsage,
     EligibleSubscriptionPlan,
     EntityCreditBalance,
     EntityCreditBalances,
@@ -96,6 +98,8 @@ from nozle.usage import UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "CustomerUsage",
+    "CustomerProjectedUsage",
     "NozleWebhookEvent",
     "WebhooksNamespace",
     "WebhookVerificationError",

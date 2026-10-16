@@ -4,13 +4,14 @@ import os
 import re
 import warnings
 from datetime import datetime
-from typing import Any, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast
 from urllib.parse import quote
 
 import requests
 
 from nozle._transport import HttpTransport
 from nozle._validation import (
+    path_segment,
     require_catalog_key,
     require_non_empty,
     require_secret_key,
@@ -34,7 +35,9 @@ from nozle.types import (
     CheckAndDeductResult,
     CheckoutResult,
     CheckoutStatus,
+    CustomerProjectedUsage,
     CustomerUpsertResult,
+    CustomerUsage,
     JSONMapping,
     PingResult,
     Plan,
@@ -685,6 +688,60 @@ class Nozle:
 
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
         self.close()
+
+    def current_usage(
+        self, customer_id: str, subscription_id: Optional[str] = None
+    ) -> CustomerUsage:
+        """Usage of the current billing period. Without ``subscription_id``, the one active
+        subscription is used."""
+        payload = self._usage_read("current_usage", customer_id, subscription_id)
+        return cast(CustomerUsage, payload["customer_usage"])
+
+    def past_usage(
+        self,
+        customer_id: str,
+        subscription_id: Optional[str] = None,
+        *,
+        periods: Optional[int] = None,
+    ) -> List[CustomerUsage]:
+        """Usage of past billing periods, newest first. ``periods`` limits how many."""
+        payload = self._usage_read(
+            "past_usage",
+            customer_id,
+            subscription_id,
+            {"periods_count": periods} if periods is not None else {},
+        )
+        return cast(List[CustomerUsage], payload.get("usage_periods") or [])
+
+    def projected_usage(
+        self, customer_id: str, subscription_id: Optional[str] = None
+    ) -> CustomerProjectedUsage:
+        """This period's usage with ``projected_amount_cents``, an estimate for the whole period
+        from the usage so far. Core answers 403 ``projected_usage_not_enabled`` unless projected
+        usage is turned on for the organization."""
+        payload = self._usage_read("projected_usage", customer_id, subscription_id)
+        return cast(CustomerProjectedUsage, payload["customer_projected_usage"])
+
+    def _usage_read(
+        self,
+        route: str,
+        customer_id: str,
+        subscription_id: Optional[str],
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Mapping[str, Any]:
+        operation = route
+        require_secret_key(self.api_key, operation)
+        require_non_empty(customer_id, "customer_id", operation)
+        subscription = subscription_id or self._resolve_subscription(customer_id)
+        payload = self._events.request(
+            operation,
+            "GET",
+            f"/api/v1/customers/{path_segment(customer_id)}/{route}",
+            params={"external_subscription_id": subscription, **(params or {})},
+        )
+        if not isinstance(payload, Mapping):
+            raise NozleAPIError(operation, 200, "response was not a JSON object")
+        return payload
 
     def _resolve_subscription(self, customer_id: str) -> str:
         operation = "track.subscription_lookup"

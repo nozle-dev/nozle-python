@@ -741,3 +741,32 @@ class UsageTrackResult(_UsageTrackResultRequired, total=False):
     remaining: str
     reason: str
     deductions: List[UsageDeduction]
+
+
+class _CustomerUsageRequired(TypedDict):
+    from_datetime: str
+    to_datetime: str
+    issuing_date: str
+    amount_cents: int
+    taxes_amount_cents: int
+    total_amount_cents: int
+    # Each item has units, amount_cents, amount_currency, charge and feature (API reference).
+    charges_usage: List[Dict[str, Any]]
+
+
+class CustomerUsage(_CustomerUsageRequired, total=False):
+    """Usage of one billing period: Core ``current_usage`` or one ``past_usage`` item."""
+
+    currency: str
+    invoice_id: Optional[str]
+
+
+class _CustomerProjectedUsageRequired(_CustomerUsageRequired):
+    projected_amount_cents: int
+
+
+class CustomerProjectedUsage(_CustomerProjectedUsageRequired, total=False):
+    """This period's usage with ``projected_amount_cents``, the estimate for the whole period."""
+
+    currency: str
+    invoice_id: Optional[str]

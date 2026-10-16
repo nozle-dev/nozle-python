@@ -4,6 +4,7 @@
 
 ### Added
 
+- `current_usage(customer_id, subscription_id=None)`, `past_usage(customer_id, subscription_id=None, periods=None)` and `projected_usage(customer_id, subscription_id=None)` read Core usage; without a subscription ID the customer's one active subscription is used. Typed as `CustomerUsage` and `CustomerProjectedUsage`.
 - `nozle.webhooks.verify(body, headers, hmac_key=None)` checks `X-Nozle-Signature` (`jwt`: Nozle's public key, read once with the secret key and cached; `hmac`: the signing secret) and returns a `NozleWebhookEvent`, or raises `WebhookVerificationError` with a `code`. No new dependency.
 - `api_key` is optional. When it is not passed, `Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and raises `ValueError` if that is not set either. An explicit `api_key` is used as before.
 - `host` keyword argument (default `https://api.nozle.app`). It fills in `base_url` (`{host}/engine`) and `events_url` (`{host}/core`) when they are not given. `base_url` and `events_url` keep their meaning and win over `host`.
