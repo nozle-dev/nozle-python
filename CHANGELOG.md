@@ -7,7 +7,7 @@
 - `invoices.list(..., payment_overdue=True)` keeps only unpaid invoices past their due date.
 - `nozle.alerts.list / get / create / update / delete` manage subscription usage alerts (`subscription_id=`) and wallet balance alerts (`customer_id=`, `wallet_code=`).
 - `nozle.invoices.list(customer_id, ...)`, `get(invoice_id)` and `download_url(invoice_id)` (the PDF URL, or `None` while it is generated). Typed as `Invoice` and `InvoicePage`.
-- `current_usage(customer_id, subscription_id=None)`, `past_usage(customer_id, subscription_id=None, periods=None)` and `projected_usage(customer_id, subscription_id=None)` read Core usage; without a subscription ID the customer's one active subscription is used. Typed as `CustomerUsage` and `CustomerProjectedUsage`.
+- `current_usage(customer_id, subscription_id=None)` and `past_usage(customer_id, subscription_id=None, periods=None)` read Core usage; without a subscription ID the customer's one active subscription is used. Typed as `CustomerUsage`.
 - `nozle.webhooks.verify(body, headers, hmac_key=None)` checks `X-Nozle-Signature` (`jwt`: Nozle's public key, read once with the secret key and cached; `hmac`: the signing secret) and returns a `NozleWebhookEvent`, or raises `WebhookVerificationError` with a `code`. No new dependency.
 - `api_key` is optional. When it is not passed, `Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and raises `ValueError` if that is not set either. An explicit `api_key` is used as before.
 - `host` keyword argument (default `https://api.nozle.app`). It fills in `base_url` (`{host}/engine`) and `events_url` (`{host}/core`) when they are not given. `base_url` and `events_url` keep their meaning and win over `host`.

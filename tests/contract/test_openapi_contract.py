@@ -29,7 +29,6 @@ CONTRACT = {
     "EntityCreditBalances": "CreditsEntityBalanceList",
     "SubscriptionOptions": "BillingSubscriptionOptionsResponse",
     "CustomerUsage": "CustomerUsageObject",
-    "CustomerProjectedUsage": "CustomerProjectedUsageObject",
     "Invoice": "InvoiceObject",
 }
 

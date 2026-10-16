@@ -37,7 +37,6 @@ from nozle.types import (
     CheckAndDeductResult,
     CheckoutResult,
     CheckoutStatus,
-    CustomerProjectedUsage,
     CustomerUpsertResult,
     CustomerUsage,
     JSONMapping,
@@ -716,15 +715,6 @@ class Nozle:
             {"periods_count": periods} if periods is not None else {},
         )
         return cast(List[CustomerUsage], payload.get("usage_periods") or [])
-
-    def projected_usage(
-        self, customer_id: str, subscription_id: Optional[str] = None
-    ) -> CustomerProjectedUsage:
-        """This period's usage with ``projected_amount_cents``, an estimate for the whole period
-        from the usage so far. Core answers 403 ``projected_usage_not_enabled`` unless projected
-        usage is turned on for the organization."""
-        payload = self._usage_read("projected_usage", customer_id, subscription_id)
-        return cast(CustomerProjectedUsage, payload["customer_projected_usage"])
 
     def _usage_read(
         self,

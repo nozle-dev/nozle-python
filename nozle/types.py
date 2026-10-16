@@ -761,17 +761,6 @@ class CustomerUsage(_CustomerUsageRequired, total=False):
     invoice_id: Optional[str]
 
 
-class _CustomerProjectedUsageRequired(_CustomerUsageRequired):
-    projected_amount_cents: int
-
-
-class CustomerProjectedUsage(_CustomerProjectedUsageRequired, total=False):
-    """This period's usage with ``projected_amount_cents``, the estimate for the whole period."""
-
-    currency: str
-    invoice_id: Optional[str]
-
-
 class _InvoiceRequired(TypedDict):
     nozle_id: str
     number: str

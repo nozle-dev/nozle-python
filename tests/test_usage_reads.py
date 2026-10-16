@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import requests_mock
 
-from nozle import Nozle, NozleAPIError, NozleAuthenticationError
+from nozle import Nozle, NozleAuthenticationError
 
 CORE = "https://api.example/core/api/v1"
 PERIOD = {
@@ -37,25 +37,6 @@ def test_past_usage_passes_the_period_count(requests_mock: requests_mock.Mocker)
     )
     assert client().past_usage("cus_1", "sub_9", periods=2) == [PERIOD, PERIOD]
     assert route.last_request.qs == {"external_subscription_id": ["sub_9"], "periods_count": ["2"]}
-
-
-def test_projected_usage_returns_the_projection(requests_mock: requests_mock.Mocker) -> None:
-    projected = {**PERIOD, "projected_amount_cents": 3100}
-    requests_mock.get(
-        f"{CORE}/customers/cus_1/projected_usage", json={"customer_projected_usage": projected}
-    )
-    assert client().projected_usage("cus_1", "sub_1")["projected_amount_cents"] == 3100
-
-
-def test_projected_usage_not_enabled_is_a_typed_error(requests_mock: requests_mock.Mocker) -> None:
-    requests_mock.get(
-        f"{CORE}/customers/cus_1/projected_usage",
-        status_code=403,
-        json={"status": 403, "error": "Forbidden", "code": "projected_usage_not_enabled"},
-    )
-    with pytest.raises(NozleAPIError) as error:
-        client().projected_usage("cus_1", "sub_1")
-    assert error.value.code == "projected_usage_not_enabled"
 
 
 def test_usage_reads_need_a_secret_key() -> None:

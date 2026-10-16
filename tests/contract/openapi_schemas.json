@@ -201,30 +201,6 @@
       "allowed"
     ]
   },
-  "CustomerProjectedUsageObject": {
-    "properties": [
-      "amount_cents",
-      "charges_usage",
-      "currency",
-      "from_datetime",
-      "invoice_id",
-      "issuing_date",
-      "projected_amount_cents",
-      "taxes_amount_cents",
-      "to_datetime",
-      "total_amount_cents"
-    ],
-    "required": [
-      "amount_cents",
-      "charges_usage",
-      "from_datetime",
-      "issuing_date",
-      "projected_amount_cents",
-      "taxes_amount_cents",
-      "to_datetime",
-      "total_amount_cents"
-    ]
-  },
   "CustomerUsageObject": {
     "properties": [
       "amount_cents",
