@@ -13,3 +13,4 @@ CreditsEntityBalanceList
 BillingSubscriptionOptionsResponse
 CustomerUsageObject
 CustomerProjectedUsageObject
+InvoiceObject

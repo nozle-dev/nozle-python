@@ -4,6 +4,7 @@
 
 ### Added
 
+- `nozle.invoices.list(customer_id, ...)`, `get(invoice_id)`, `download_url(invoice_id)` (the PDF URL, or `None` while it is generated) and `preview(customer_id, subscription_ids=... | plan_code=...)`. Typed as `Invoice` and `InvoicePage`.
 - `current_usage(customer_id, subscription_id=None)`, `past_usage(customer_id, subscription_id=None, periods=None)` and `projected_usage(customer_id, subscription_id=None)` read Core usage; without a subscription ID the customer's one active subscription is used. Typed as `CustomerUsage` and `CustomerProjectedUsage`.
 - `nozle.webhooks.verify(body, headers, hmac_key=None)` checks `X-Nozle-Signature` (`jwt`: Nozle's public key, read once with the secret key and cached; `hmac`: the signing secret) and returns a `NozleWebhookEvent`, or raises `WebhookVerificationError` with a `code`. No new dependency.
 - `api_key` is optional. When it is not passed, `Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and raises `ValueError` if that is not set either. An explicit `api_key` is used as before.

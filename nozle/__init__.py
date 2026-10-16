@@ -17,6 +17,7 @@ from nozle.events import EventsNamespace
 from nozle.integrations import NozleTrackingWarning
 from nozle.integrations.anthropic import wrap_anthropic
 from nozle.integrations.openai import wrap_openai
+from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.types import (
     CancellationPolicy,
@@ -62,6 +63,8 @@ from nozle.types import (
     EntitySubscriptionList,
     EntitySubscriptionPlan,
     HostedCheckoutResult,
+    Invoice,
+    InvoicePage,
     JSONMapping,
     ManagedSubscription,
     PendingSubscriptionChange,
@@ -98,6 +101,9 @@ from nozle.usage import UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "Invoice",
+    "InvoicePage",
+    "InvoicesNamespace",
     "CustomerUsage",
     "CustomerProjectedUsage",
     "NozleWebhookEvent",

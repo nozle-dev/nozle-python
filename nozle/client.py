@@ -26,6 +26,7 @@ from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
 from nozle.errors import NozleAPIError, NozleValidationError
 from nozle.events import EventsNamespace
+from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.track import track as _track
 from nozle.types import (
@@ -109,6 +110,7 @@ class Nozle:
         self.entity_subscriptions = EntitySubscriptionsNamespace(self._events, self.api_key)
         self.usage = UsageNamespace(self._engine, self.api_key)
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
+        self.invoices = InvoicesNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
     def track(

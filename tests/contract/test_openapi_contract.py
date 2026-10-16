@@ -30,6 +30,7 @@ CONTRACT = {
     "SubscriptionOptions": "BillingSubscriptionOptionsResponse",
     "CustomerUsage": "CustomerUsageObject",
     "CustomerProjectedUsage": "CustomerProjectedUsageObject",
+    "Invoice": "InvoiceObject",
 }
 
 

@@ -770,3 +770,29 @@ class CustomerProjectedUsage(_CustomerProjectedUsageRequired, total=False):
 
     currency: str
     invoice_id: Optional[str]
+
+
+class _InvoiceRequired(TypedDict):
+    nozle_id: str
+    number: str
+    issuing_date: str
+    status: str
+    payment_status: str
+    currency: str
+    fees_amount_cents: int
+    taxes_amount_cents: int
+    total_amount_cents: int
+
+
+class Invoice(_InvoiceRequired, total=False):
+    """An invoice. The API reference lists every field; these are the ones most code reads."""
+
+    payment_due_date: Optional[str]
+    payment_overdue: bool
+    file_url: Optional[str]
+    customer: Dict[str, Any]
+
+
+class InvoicePage(TypedDict):
+    invoices: List[Invoice]
+    meta: Dict[str, Any]
