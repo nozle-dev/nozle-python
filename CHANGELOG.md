@@ -4,6 +4,7 @@
 
 ### Added
 
+- `invoices.list(..., payment_overdue=True)` keeps only unpaid invoices past their due date.
 - `nozle.alerts.list / get / create / update / delete` manage subscription usage alerts (`subscription_id=`) and wallet balance alerts (`customer_id=`, `wallet_code=`).
 - `nozle.invoices.list(customer_id, ...)`, `get(invoice_id)` and `download_url(invoice_id)` (the PDF URL, or `None` while it is generated). Typed as `Invoice` and `InvoicePage`.
 - `current_usage(customer_id, subscription_id=None)`, `past_usage(customer_id, subscription_id=None, periods=None)` and `projected_usage(customer_id, subscription_id=None)` read Core usage; without a subscription ID the customer's one active subscription is used. Typed as `CustomerUsage` and `CustomerProjectedUsage`.

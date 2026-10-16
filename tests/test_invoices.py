@@ -15,12 +15,15 @@ def client() -> Nozle:
 
 def test_list_sends_the_filters(requests_mock: requests_mock.Mocker) -> None:
     route = requests_mock.get(f"{CORE}/invoices", json={"invoices": [INVOICE], "meta": {}})
-    page = client().invoices.list("cus 1", status="finalized", payment_status="failed", page=2)
+    page = client().invoices.list(
+        "cus 1", status="finalized", payment_status="failed", payment_overdue=True, page=2
+    )
     assert page["invoices"][0]["number"] == "INV-1"
     assert route.last_request.qs == {
         "external_customer_id": ["cus 1"],
         "status": ["finalized"],
         "payment_status": ["failed"],
+        "payment_overdue": ["true"],
         "page": ["2"],
     }
 

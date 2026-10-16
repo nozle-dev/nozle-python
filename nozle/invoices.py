@@ -23,12 +23,14 @@ class InvoicesNamespace:
         *,
         status: Optional[str] = None,
         payment_status: Optional[str] = None,
+        payment_overdue: Optional[bool] = None,
         issuing_date_from: Optional[str] = None,
         issuing_date_to: Optional[str] = None,
         page: Optional[int] = None,
         per_page: Optional[int] = None,
     ) -> InvoicePage:
-        """A customer's invoices, newest first. Dates are inclusive ``YYYY-MM-DD``."""
+        """A customer's invoices, newest first. Dates are inclusive ``YYYY-MM-DD``.
+        ``payment_overdue=True`` keeps only unpaid invoices past their due date."""
         operation = "invoices.list"
         require_secret_key(self._api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -36,6 +38,7 @@ class InvoicesNamespace:
         for name, value in (
             ("status", status),
             ("payment_status", payment_status),
+            ("payment_overdue", None if payment_overdue is None else str(payment_overdue).lower()),
             ("issuing_date_from", issuing_date_from),
             ("issuing_date_to", issuing_date_to),
             ("page", page),
