@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, Mapping, Optional, Union
+from functools import partial
+from typing import TYPE_CHECKING, Any, Awaitable, Dict, Generic, Mapping, Optional, Tuple, Union
 
 import requests
 from requests.adapters import HTTPAdapter
 
+from nozle._operation import Async, M, Step, Steps, Sync, T, run_async, run_sync
 from nozle.errors import NozleAPIError, NozleTransportError
+
+if TYPE_CHECKING:
+    import httpx
 
 QueryValue = Union[str, int]
 
@@ -24,8 +30,8 @@ _SENSITIVE_KEYS = {
 }
 
 
-class HttpTransport:
-    """Shared requests transport used by all SDK namespaces.
+class BaseTransport(Generic[M]):
+    """What the sync and async transports share: headers, retry policy and error mapping.
 
     It never retries unless ``max_retries`` is set.
     """
@@ -35,7 +41,6 @@ class HttpTransport:
         base_url: str,
         api_key: str,
         timeout: float,
-        session: Optional[requests.Session] = None,
         max_retries: int = 0,
         retry_delay: float = 0.5,
     ) -> None:
@@ -44,12 +49,6 @@ class HttpTransport:
         self.timeout = timeout
         self.max_retries = max(0, int(max_retries))
         self.retry_delay = retry_delay
-        self._owns_session = session is None
-        self.session = session or requests.Session()
-        if session is None:
-            adapter = HTTPAdapter(max_retries=0)
-            self.session.mount("http://", adapter)
-            self.session.mount("https://", adapter)
 
     def request(
         self,
@@ -63,6 +62,23 @@ class HttpTransport:
         expect_json: bool = True,
         idempotent: bool = False,
     ) -> Any:
+        raise NotImplementedError
+
+    def run(self, steps: Steps[T]) -> Any:
+        """Run an operation: its result, or an awaitable of it on the async transport."""
+        raise NotImplementedError
+
+    def call(self, operation: str, method: str, path: str, **options: Any) -> Step:
+        """One request, as a step an operation yields (see ``nozle._operation``)."""
+        return partial(self.request, operation, method, path, **options)
+
+    def _prepare(
+        self,
+        method: str,
+        json_body: Optional[Mapping[str, Any]],
+        headers: Optional[Mapping[str, str]],
+        idempotent: bool,
+    ) -> Tuple[Dict[str, str], int, Any]:
         request_headers: Dict[str, str] = {"Authorization": f"Bearer {self._api_key}"}
         if json_body is not None:
             request_headers["Content-Type"] = "application/json"
@@ -75,32 +91,17 @@ class HttpTransport:
             method.upper() in ("GET", "HEAD") or idempotent or "Idempotency-Key" in request_headers
         )
         retries = self.max_retries if safe else 0
-        body = _without_unset(json_body)
-        attempt = 0
-        while True:
-            response = None
-            try:
-                response = self.session.request(
-                    method=method,
-                    url=f"{self.base_url}{path}",
-                    headers=request_headers,
-                    params=params,
-                    json=body,
-                    timeout=self.timeout,
-                )
-            except requests.RequestException as error:
-                if attempt >= retries:
-                    raise NozleTransportError(operation) from error
-            if response is not None and not (
-                response.status_code == 429 or response.status_code >= 500
-            ):
-                break
-            if response is not None and attempt >= retries:
-                break
-            time.sleep(self._delay(attempt, response))
-            attempt += 1
+        return request_headers, retries, _without_unset(json_body)
 
-        assert response is not None
+    @staticmethod
+    def _done(response: Any, attempt: int, retries: int) -> bool:
+        if response is None:
+            return False
+        return not (response.status_code == 429 or response.status_code >= 500) or (
+            attempt >= retries
+        )
+
+    def _result(self, operation: str, response: Any, expect_json: bool) -> Any:
         if not 200 <= response.status_code < 300:
             raise NozleAPIError(
                 operation=operation,
@@ -121,7 +122,7 @@ class HttpTransport:
                 response_details="response was not valid JSON",
             ) from error
 
-    def _delay(self, attempt: int, response: Optional[requests.Response]) -> float:
+    def _delay(self, attempt: int, response: Any) -> float:
         header = response.headers.get("Retry-After") if response is not None else None
         retry_after = _parse_retry_after(header)
         if retry_after is not None:
@@ -129,16 +130,132 @@ class HttpTransport:
         backoff: float = min(self.retry_delay * 2**attempt, 10.0)
         return backoff * (0.5 + random.random() / 2)
 
-    def close(self) -> None:
-        if self._owns_session:
-            self.session.close()
-
-    def _safe_response_details(self, response: requests.Response) -> Any:
+    def _safe_response_details(self, response: Any) -> Any:
         try:
             details = response.json()
         except ValueError:
             details = response.text[:2048]
         return _sanitize(details, self._api_key)
+
+
+class HttpTransport(BaseTransport[Sync]):
+    """Shared requests transport used by all ``Nozle`` namespaces."""
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float,
+        session: Optional[requests.Session] = None,
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
+    ) -> None:
+        super().__init__(base_url, api_key, timeout, max_retries, retry_delay)
+        self._owns_session = session is None
+        self.session = session or requests.Session()
+        if session is None:
+            adapter = HTTPAdapter(max_retries=0)
+            self.session.mount("http://", adapter)
+            self.session.mount("https://", adapter)
+
+    def run(self, steps: Steps[T]) -> T:
+        return run_sync(steps)
+
+    def request(
+        self,
+        operation: str,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, QueryValue]] = None,
+        json_body: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+        expect_json: bool = True,
+        idempotent: bool = False,
+    ) -> Any:
+        request_headers, retries, body = self._prepare(method, json_body, headers, idempotent)
+        attempt = 0
+        while True:
+            response = None
+            try:
+                response = self.session.request(
+                    method=method,
+                    url=f"{self.base_url}{path}",
+                    headers=request_headers,
+                    params=params,
+                    json=body,
+                    timeout=self.timeout,
+                )
+            except requests.RequestException as error:
+                if attempt >= retries:
+                    raise NozleTransportError(operation) from error
+            if self._done(response, attempt, retries):
+                break
+            time.sleep(self._delay(attempt, response))
+            attempt += 1
+        return self._result(operation, response, expect_json)
+
+    def close(self) -> None:
+        if self._owns_session:
+            self.session.close()
+
+
+class AsyncHttpTransport(BaseTransport[Async]):
+    """The httpx.AsyncClient transport used by all ``AsyncNozle`` namespaces."""
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float,
+        client: httpx.AsyncClient,
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
+    ) -> None:
+        super().__init__(base_url, api_key, timeout, max_retries, retry_delay)
+        self.client = client
+
+    def run(self, steps: Steps[T]) -> Awaitable[T]:
+        return run_async(steps)
+
+    async def request(
+        self,
+        operation: str,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, QueryValue]] = None,
+        json_body: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+        expect_json: bool = True,
+        idempotent: bool = False,
+    ) -> Any:
+        import httpx
+
+        request_headers, retries, body = self._prepare(method, json_body, headers, idempotent)
+        # requests leaves out a query value of None; httpx would send it empty.
+        query = {key: value for key, value in (params or {}).items() if value is not None}
+        attempt = 0
+        while True:
+            response = None
+            try:
+                response = await self.client.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    headers=request_headers,
+                    params=query,
+                    json=body,
+                    timeout=self.timeout,
+                    follow_redirects=True,
+                )
+            except httpx.HTTPError as error:
+                if attempt >= retries:
+                    raise NozleTransportError(operation) from error
+            if self._done(response, attempt, retries):
+                break
+            await asyncio.sleep(self._delay(attempt, response))
+            attempt += 1
+        return self._result(operation, response, expect_json)
 
 
 def _sanitize(value: Any, api_key: str) -> Any:

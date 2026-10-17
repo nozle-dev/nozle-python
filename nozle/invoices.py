@@ -4,19 +4,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import path_segment, require_non_empty, require_secret_key
 from nozle.errors import NozleAPIError
 from nozle.types import Invoice, InvoicePage
 
 
-class InvoicesNamespace:
+class InvoicesNamespace(Resource[M]):
     """Reads a customer's invoices from Core."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
+    @endpoint
     def list(
         self,
         customer_id: str,
@@ -28,7 +25,7 @@ class InvoicesNamespace:
         issuing_date_to: Optional[str] = None,
         page: Optional[int] = None,
         per_page: Optional[int] = None,
-    ) -> InvoicePage:
+    ) -> Steps[InvoicePage]:
         """A customer's invoices, newest first. Dates are inclusive ``YYYY-MM-DD``.
         ``payment_overdue=True`` keeps only unpaid invoices past their due date."""
         operation = "invoices.list"
@@ -46,24 +43,26 @@ class InvoicesNamespace:
         ):
             if value is not None:
                 params[name] = value
-        payload = self._transport.request(operation, "GET", "/api/v1/invoices", params=params)
+        payload = yield self._transport.call(operation, "GET", "/api/v1/invoices", params=params)
         return cast(InvoicePage, _object(operation, payload))
 
-    def get(self, invoice_id: str) -> Invoice:
+    @endpoint
+    def get(self, invoice_id: str) -> Steps[Invoice]:
         operation = "invoices.get"
         require_secret_key(self._api_key, operation)
         require_non_empty(invoice_id, "invoice_id", operation)
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation, "GET", f"/api/v1/invoices/{path_segment(invoice_id)}"
         )
         return cast(Invoice, _object(operation, payload)["invoice"])
 
-    def download_url(self, invoice_id: str) -> Optional[str]:
+    @endpoint
+    def download_url(self, invoice_id: str) -> Steps[Optional[str]]:
         """The PDF's URL, or ``None`` while Core is still generating it (ask again shortly)."""
         operation = "invoices.download_url"
         require_secret_key(self._api_key, operation)
         require_non_empty(invoice_id, "invoice_id", operation)
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation,
             "POST",
             f"/api/v1/invoices/{path_segment(invoice_id)}/download",

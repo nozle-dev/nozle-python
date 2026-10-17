@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import os
 import re
-import warnings
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union, cast
 from urllib.parse import quote
 
 import requests
 
-from nozle._transport import HttpTransport
+from nozle._operation import Async, M, Resource, Steps, Sync, endpoint, warn_caller
+from nozle._transport import AsyncHttpTransport, BaseTransport, HttpTransport
 from nozle._validation import (
     path_segment,
     require_catalog_key,
@@ -18,7 +18,7 @@ from nozle._validation import (
     validate_idempotency_key,
 )
 from nozle.alerts import AlertsNamespace
-from nozle.can import can as _can
+from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
@@ -29,7 +29,7 @@ from nozle.errors import NozleAPIError, NozleValidationError
 from nozle.events import EventsNamespace
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
-from nozle.track import track as _track
+from nozle.track import track_steps
 from nozle.types import (
     CancellationPolicy,
     CancelSubscriptionResult,
@@ -54,50 +54,40 @@ from nozle.types import (
 from nozle.usage import UsageNamespace
 from nozle.webhooks import WebhooksNamespace
 
+if TYPE_CHECKING:
+    import httpx
 
-class Nozle:
-    """Synchronous backend SDK for Nozle Engine and Core APIs."""
+
+def _resolve_api_key(api_key: Optional[str]) -> str:
+    if api_key is None:
+        api_key = os.environ.get("NOZLE_SECRET_KEY")
+    if api_key is None:
+        raise ValueError("Nozle: pass api_key or set the NOZLE_SECRET_KEY environment variable")
+    return api_key
+
+
+class _BaseNozle(Resource[M]):
+    """Everything ``Nozle`` and ``AsyncNozle`` share. Each method is written once and runs on the
+    client's transport (see ``nozle._operation``)."""
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        events_url: Optional[str] = None,
-        timeout: float = 10,
-        *,
-        host: str = "https://api.nozle.app",
-        max_retries: int = 0,
-        retry_delay: float = 0.5,
-        _session: Optional[requests.Session] = None,
+        api_key: str,
+        base_url: Optional[str],
+        events_url: Optional[str],
+        timeout: float,
+        host: str,
+        transport: Callable[[str], BaseTransport[M]],
     ) -> None:
-        if api_key is None:
-            api_key = os.environ.get("NOZLE_SECRET_KEY")
-        if api_key is None:
-            raise ValueError("Nozle: pass api_key or set the NOZLE_SECRET_KEY environment variable")
         self.api_key = api_key
         # host fills in whichever of base_url (Engine) and events_url (Core) is not given.
         host = host.rstrip("/")
         self.base_url = (base_url or f"{host}/engine").rstrip("/")
         self.events_url = (events_url or f"{host}/core").rstrip("/")
         self.timeout = timeout
-        self._session = _session or requests.Session()
-        self._owns_session = _session is None
-        self._engine = HttpTransport(
-            self.base_url,
-            self.api_key,
-            timeout=self.timeout,
-            session=self._session,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-        )
-        self._events = HttpTransport(
-            self.events_url,
-            self.api_key,
-            timeout=self.timeout,
-            session=self._session,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-        )
+        self._engine = transport(self.base_url)
+        self._events = transport(self.events_url)
+        super().__init__(self._engine, self.api_key)
         self.margin = MarginClient(
             self.base_url, self.api_key, timeout=self.timeout, _transport=self._engine
         )
@@ -114,6 +104,7 @@ class Nozle:
         self.alerts = AlertsNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
+    @endpoint
     def track(
         self,
         customer_id: str,
@@ -122,11 +113,11 @@ class Nozle:
         subscription_id: Optional[str] = None,
         transaction_id: Optional[str] = None,
         timestamp: Optional[str] = None,
-    ) -> str:
+    ) -> Steps[str]:
         require_secret_key(self.api_key, "track")
         if not subscription_id:
-            subscription_id = self._resolve_subscription(customer_id)
-        return _track(
+            subscription_id = yield from self._resolve_subscription(customer_id)
+        transaction = yield from track_steps(
             self._engine,
             self.api_key,
             customer_id,
@@ -136,18 +127,21 @@ class Nozle:
             transaction_id,
             timestamp,
         )
+        return transaction
 
+    @endpoint
     def can(
         self,
         customer_id: str,
         feature: str,
         metadata: Optional[Mapping[str, str]] = None,
-    ) -> CanResult:
-        return _can(self._engine, self.api_key, customer_id, feature, metadata)
+    ) -> Steps[CanResult]:
+        return (yield from can_steps(self._engine, self.api_key, customer_id, feature, metadata))
 
-    def plans(self) -> list[Plan]:
+    @endpoint
+    def plans(self) -> Steps[list[Plan]]:
         require_catalog_key(self.api_key)
-        payload = self._engine.request("plans", "GET", "/api/v1/plans")
+        payload = yield self._engine.call("plans", "GET", "/api/v1/plans")
         if not isinstance(payload, Mapping):
             raise NozleAPIError("plans", 200, "response was not a JSON object")
         plans = payload.get("plans")
@@ -157,6 +151,7 @@ class Nozle:
             raise NozleAPIError("plans", 200, "plans was not a list")
         return cast(list[Plan], plans)
 
+    @endpoint
     def checkout(
         self,
         customer_id: str,
@@ -169,7 +164,7 @@ class Nozle:
         external_entity_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
         quote_id: Optional[str] = None,
-    ) -> CheckoutResult:
+    ) -> Steps[CheckoutResult]:
         operation = "checkout"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -180,11 +175,7 @@ class Nozle:
             )
         resolved_return_url = return_url if return_url is not None else success_url
         if success_url is not None:
-            warnings.warn(
-                "success_url is deprecated; use return_url",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            warn_caller("success_url is deprecated; use return_url", DeprecationWarning)
         body: dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
         if subscription_id is not None:
             require_non_empty(subscription_id, "subscription_id", operation)
@@ -199,36 +190,42 @@ class Nozle:
         try:
             return cast(
                 CheckoutResult,
-                self._checkout_request(
-                    operation,
-                    body,
-                    idempotency_key=idempotency_key,
-                    register_mandate=register_mandate,
-                    external_entity_id=external_entity_id,
+                (
+                    yield from self._checkout_request(
+                        operation,
+                        body,
+                        idempotency_key=idempotency_key,
+                        register_mandate=register_mandate,
+                        external_entity_id=external_entity_id,
+                    )
                 ),
             )
         finally:
             self._sub_cache.pop(customer_id, None)  # the active subscription may have changed
 
+    @endpoint
     def checkout_invoice(
         self,
         invoice_id: str,
         *,
         idempotency_key: Optional[str] = None,
         register_mandate: Optional[bool] = None,
-    ) -> CheckoutResult:
+    ) -> Steps[CheckoutResult]:
         require_secret_key(self.api_key, "checkout_invoice")
         require_non_empty(invoice_id, "invoice_id", "checkout_invoice")
         return cast(
             CheckoutResult,
-            self._checkout_request(
-                "checkout_invoice",
-                {"invoice_id": invoice_id},
-                idempotency_key=idempotency_key,
-                register_mandate=register_mandate,
+            (
+                yield from self._checkout_request(
+                    "checkout_invoice",
+                    {"invoice_id": invoice_id},
+                    idempotency_key=idempotency_key,
+                    register_mandate=register_mandate,
+                )
             ),
         )
 
+    @endpoint
     def verify_checkout(
         self,
         checkout_id: str,
@@ -236,7 +233,7 @@ class Nozle:
         *,
         customer_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
-    ) -> CheckoutStatus:
+    ) -> Steps[CheckoutStatus]:
         operation = "verify_checkout"
         require_secret_key(self.api_key, operation)
         require_non_empty(checkout_id, "checkout_id", operation)
@@ -247,32 +244,37 @@ class Nozle:
             require_non_empty(value, field, operation)
         return cast(
             CheckoutStatus,
-            self._engine.request(
-                operation,
-                "POST",
-                f"/api/v1/checkout/{quote(checkout_id, safe='')}/verify",
-                json_body=verification,
-                params=self._checkout_scope(customer_id, subscription_id),
+            (
+                yield self._engine.call(
+                    operation,
+                    "POST",
+                    f"/api/v1/checkout/{quote(checkout_id, safe='')}/verify",
+                    json_body=verification,
+                    params=self._checkout_scope(customer_id, subscription_id),
+                )
             ),
         )
 
+    @endpoint
     def checkout_status(
         self,
         checkout_id: str,
         *,
         customer_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
-    ) -> CheckoutStatus:
+    ) -> Steps[CheckoutStatus]:
         operation = "checkout_status"
         require_secret_key(self.api_key, operation)
         require_non_empty(checkout_id, "checkout_id", operation)
         return cast(
             CheckoutStatus,
-            self._engine.request(
-                operation,
-                "GET",
-                f"/api/v1/checkout/{quote(checkout_id, safe='')}",
-                params=self._checkout_scope(customer_id, subscription_id),
+            (
+                yield self._engine.call(
+                    operation,
+                    "GET",
+                    f"/api/v1/checkout/{quote(checkout_id, safe='')}",
+                    params=self._checkout_scope(customer_id, subscription_id),
+                )
             ),
         )
 
@@ -285,34 +287,43 @@ class Nozle:
         require_non_empty(subscription_id or "", "subscription_id", "checkout scope")
         return {"customer_id": customer_id or "", "subscription_id": subscription_id or ""}
 
-    def subscription_options(self, customer_id: str, subscription_id: str) -> SubscriptionOptions:
+    @endpoint
+    def subscription_options(
+        self, customer_id: str, subscription_id: str
+    ) -> Steps[SubscriptionOptions]:
         require_secret_key(self.api_key, "subscription_options")
         return cast(
             SubscriptionOptions,
-            self._engine.request(
-                "subscription_options",
-                "GET",
-                "/api/v1/subscriptions/options",
-                params=self._checkout_scope(customer_id, subscription_id),
+            (
+                yield self._engine.call(
+                    "subscription_options",
+                    "GET",
+                    "/api/v1/subscriptions/options",
+                    params=self._checkout_scope(customer_id, subscription_id),
+                )
             ),
         )
 
+    @endpoint
     def preview_subscription_change(
         self, customer_id: str, subscription_id: str, plan_code: str
-    ) -> SubscriptionChangePreview:
+    ) -> Steps[SubscriptionChangePreview]:
         require_secret_key(self.api_key, "preview_subscription_change")
         scope = self._checkout_scope(customer_id, subscription_id) or {}
         require_non_empty(plan_code, "plan_code", "preview_subscription_change")
         return cast(
             SubscriptionChangePreview,
-            self._engine.request(
-                "preview_subscription_change",
-                "POST",
-                "/api/v1/subscriptions/preview",
-                json_body={**scope, "plan_code": plan_code},
+            (
+                yield self._engine.call(
+                    "preview_subscription_change",
+                    "POST",
+                    "/api/v1/subscriptions/preview",
+                    json_body={**scope, "plan_code": plan_code},
+                )
             ),
         )
 
+    @endpoint
     def withdraw_pending_subscription_change(
         self,
         customer_id: str,
@@ -320,7 +331,7 @@ class Nozle:
         pending_subscription_id: str,
         *,
         idempotency_key: str,
-    ) -> WithdrawPendingSubscriptionChangeResult:
+    ) -> Steps[WithdrawPendingSubscriptionChangeResult]:
         operation = "withdraw_pending_subscription_change"
         require_secret_key(self.api_key, operation)
         scope = self._checkout_scope(customer_id, subscription_id) or {}
@@ -328,12 +339,14 @@ class Nozle:
         validate_idempotency_key(idempotency_key, operation)
         return cast(
             WithdrawPendingSubscriptionChangeResult,
-            self._engine.request(
-                operation,
-                "POST",
-                "/api/v1/subscriptions/transitions/withdraw",
-                json_body={**scope, "pending_subscription_id": pending_subscription_id},
-                headers={"Idempotency-Key": idempotency_key},
+            (
+                yield self._engine.call(
+                    operation,
+                    "POST",
+                    "/api/v1/subscriptions/transitions/withdraw",
+                    json_body={**scope, "pending_subscription_id": pending_subscription_id},
+                    headers={"Idempotency-Key": idempotency_key},
+                )
             ),
         )
 
@@ -345,7 +358,7 @@ class Nozle:
         idempotency_key: Optional[str] = None,
         register_mandate: Optional[bool] = None,
         external_entity_id: Optional[str] = None,
-    ) -> Any:
+    ) -> Steps[Any]:
         headers = None
         if idempotency_key is not None:
             validate_idempotency_key(idempotency_key, operation)
@@ -356,11 +369,14 @@ class Nozle:
             body["register_mandate"] = register_mandate
         if external_entity_id is not None:
             body["external_entity_id"] = external_entity_id
-        return self._engine.request(
-            operation, "POST", "/api/v1/checkout", json_body=body, headers=headers
+        return (
+            yield self._engine.call(
+                operation, "POST", "/api/v1/checkout", json_body=body, headers=headers
+            )
         )
 
-    def subscribe(self, customer_id: str, plan_code: str) -> SubscribeResult:
+    @endpoint
+    def subscribe(self, customer_id: str, plan_code: str) -> Steps[SubscribeResult]:
         operation = "subscribe"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -368,22 +384,25 @@ class Nozle:
         try:
             return cast(
                 SubscribeResult,
-                self._engine.request(
-                    operation,
-                    "POST",
-                    "/api/v1/subscribe",
-                    json_body={"plan_code": plan_code, "customer_id": customer_id},
+                (
+                    yield self._engine.call(
+                        operation,
+                        "POST",
+                        "/api/v1/subscribe",
+                        json_body={"plan_code": plan_code, "customer_id": customer_id},
+                    )
                 ),
             )
         finally:
             self._sub_cache.pop(customer_id, None)
 
+    @endpoint
     def cancel_subscription(
         self,
         customer_id: str,
         subscription_id: str,
         policy: CancellationPolicy = "end_of_period",
-    ) -> CancelSubscriptionResult:
+    ) -> Steps[CancelSubscriptionResult]:
         operation = "cancel_subscription"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -396,42 +415,48 @@ class Nozle:
         try:
             return cast(
                 CancelSubscriptionResult,
-                self._engine.request(
-                    operation,
-                    "DELETE",
-                    f"/api/v1/subscriptions/{quote(subscription_id, safe='')}",
-                    params={
-                        "customer_id": customer_id,
-                        "cancellation_policy": policy,
-                    },
+                (
+                    yield self._engine.call(
+                        operation,
+                        "DELETE",
+                        f"/api/v1/subscriptions/{quote(subscription_id, safe='')}",
+                        params={
+                            "customer_id": customer_id,
+                            "cancellation_policy": policy,
+                        },
+                    )
                 ),
             )
         finally:
             self._sub_cache.pop(customer_id, None)
 
+    @endpoint
     def preview_subscription_transition(
         self,
         params: SubscriptionTransitionParams,
-    ) -> SubscriptionTransitionPreview:
+    ) -> Steps[SubscriptionTransitionPreview]:
         operation = "preview_subscription_transition"
         body = self._subscription_transition_body(params, operation)
         return cast(
             SubscriptionTransitionPreview,
-            self._engine.request(
-                operation,
-                "POST",
-                "/api/v1/subscriptions/transitions/preview",
-                json_body=body,
-                idempotent=True,
+            (
+                yield self._engine.call(
+                    operation,
+                    "POST",
+                    "/api/v1/subscriptions/transitions/preview",
+                    json_body=body,
+                    idempotent=True,
+                )
             ),
         )
 
+    @endpoint
     def apply_subscription_transition(
         self,
         params: SubscriptionTransitionParams,
         *,
         idempotency_key: str,
-    ) -> SubscriptionTransitionResult:
+    ) -> Steps[SubscriptionTransitionResult]:
         operation = "apply_subscription_transition"
         body = self._subscription_transition_body(params, operation)
         require_non_empty(idempotency_key, "idempotency_key", operation)
@@ -442,12 +467,14 @@ class Nozle:
         try:
             return cast(
                 SubscriptionTransitionResult,
-                self._engine.request(
-                    operation,
-                    "POST",
-                    "/api/v1/subscriptions/transitions",
-                    json_body=body,
-                    headers={"Idempotency-Key": idempotency_key},
+                (
+                    yield self._engine.call(
+                        operation,
+                        "POST",
+                        "/api/v1/subscriptions/transitions",
+                        json_body=body,
+                        headers={"Idempotency-Key": idempotency_key},
+                    )
                 ),
             )
         finally:
@@ -567,23 +594,16 @@ class Nozle:
         """
         from nozle.integrations.capture import wrap_http_client
 
-        return wrap_http_client(client, self, **options)
-
-    def capture_http_client(self, **options: Any) -> Any:
-        """Return a new httpx client that records LLM token usage (``module="httpx2"`` for httpx2).
-
-        See :func:`nozle.integrations.capture.capture_http_client`.
-        """
-        from nozle.integrations.capture import capture_http_client
-
-        return capture_http_client(self, **options)
+        return wrap_http_client(client, cast(Any, self), **options)
 
     def capture_async_http_client(self, **options: Any) -> Any:
-        """The async form of :meth:`capture_http_client`."""
+        """Return a new ``httpx.AsyncClient`` that records LLM token usage, for ``AsyncOpenAI``
+        and the like. See :func:`nozle.integrations.capture.capture_async_http_client`."""
         from nozle.integrations.capture import capture_async_http_client
 
-        return capture_async_http_client(self, **options)
+        return capture_async_http_client(cast(Any, self), **options)
 
+    @endpoint
     def record_usage(
         self,
         customer_id: str,
@@ -600,7 +620,7 @@ class Nozle:
         latency_ms: int = 0,
         feature: Optional[str] = None,
         cost_meter_code: Optional[str] = None,
-    ) -> None:
+    ) -> Steps[None]:
         """Record one LLM call's token usage that your code read itself.
 
         ``input_tokens`` counts all input, including cached input and cache writes;
@@ -609,7 +629,7 @@ class Nozle:
         """
         from nozle.integrations._common import (
             ProviderTokenUsage,
-            capture_provider_usage,
+            capture_usage_steps,
             compact_categories,
             token_count,
         )
@@ -633,7 +653,7 @@ class Nozle:
                 )
             ),
         )
-        errors = capture_provider_usage(
+        errors = yield from capture_usage_steps(
             self,
             customer_id,
             feature_code,
@@ -648,16 +668,18 @@ class Nozle:
         if errors:
             raise errors[0]
 
-    def ping(self) -> PingResult:
+    @endpoint
+    def ping(self) -> Steps[PingResult]:
         require_secret_key(self.api_key, "ping")
-        return cast(PingResult, self._engine.request("ping", "GET", "/api/v1/ping"))
+        return cast(PingResult, (yield self._engine.call("ping", "GET", "/api/v1/ping")))
 
+    @endpoint
     def check_and_deduct(
         self,
         customer_id: str,
         feature: Union[str, int, float, None] = None,
         credits: Union[int, float, None] = None,
-    ) -> CheckAndDeductResult:
+    ) -> Steps[CheckAndDeductResult]:
         """Deduct credits from the customer's wallet (legacy wallet adapter).
 
         Call it as ``check_and_deduct(customer_id, credits=5)``. ``feature`` is
@@ -674,41 +696,35 @@ class Nozle:
             raise NozleValidationError(f"{operation} requires credits")
         return cast(
             CheckAndDeductResult,
-            self._engine.request(
-                operation,
-                "POST",
-                "/api/v1/check-and-deduct",
-                json_body={"customer_id": customer_id, "credits": credits},
+            (
+                yield self._engine.call(
+                    operation,
+                    "POST",
+                    "/api/v1/check-and-deduct",
+                    json_body={"customer_id": customer_id, "credits": credits},
+                )
             ),
         )
 
-    def close(self) -> None:
-        if self._owns_session:
-            self._session.close()
-
-    def __enter__(self) -> Nozle:
-        return self
-
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
-        self.close()
-
+    @endpoint
     def current_usage(
         self, customer_id: str, subscription_id: Optional[str] = None
-    ) -> CustomerUsage:
+    ) -> Steps[CustomerUsage]:
         """Usage of the current billing period. Without ``subscription_id``, the one active
         subscription is used."""
-        payload = self._usage_read("current_usage", customer_id, subscription_id)
+        payload = yield from self._usage_read("current_usage", customer_id, subscription_id)
         return cast(CustomerUsage, payload["customer_usage"])
 
+    @endpoint
     def past_usage(
         self,
         customer_id: str,
         subscription_id: Optional[str] = None,
         *,
         periods: Optional[int] = None,
-    ) -> List[CustomerUsage]:
+    ) -> Steps[List[CustomerUsage]]:
         """Usage of past billing periods, newest first. ``periods`` limits how many."""
-        payload = self._usage_read(
+        payload = yield from self._usage_read(
             "past_usage",
             customer_id,
             subscription_id,
@@ -722,12 +738,12 @@ class Nozle:
         customer_id: str,
         subscription_id: Optional[str],
         params: Optional[Dict[str, Any]] = None,
-    ) -> Mapping[str, Any]:
+    ) -> Steps[Mapping[str, Any]]:
         operation = route
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
-        subscription = subscription_id or self._resolve_subscription(customer_id)
-        payload = self._events.request(
+        subscription = subscription_id or (yield from self._resolve_subscription(customer_id))
+        payload = yield self._events.call(
             operation,
             "GET",
             f"/api/v1/customers/{path_segment(customer_id)}/{route}",
@@ -737,7 +753,7 @@ class Nozle:
             raise NozleAPIError(operation, 200, "response was not a JSON object")
         return payload
 
-    def _resolve_subscription(self, customer_id: str) -> str:
+    def _resolve_subscription(self, customer_id: str) -> Steps[str]:
         operation = "track.subscription_lookup"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -745,7 +761,7 @@ class Nozle:
         if cached:
             return cached
 
-        payload = self._events.request(
+        payload = yield self._events.call(
             operation,
             "GET",
             "/api/v1/subscriptions",
@@ -783,4 +799,113 @@ class Nozle:
         return external_id
 
 
-__all__ = ["Nozle", "CustomerUpsertResult"]
+class Nozle(_BaseNozle[Sync]):
+    """Synchronous backend SDK for Nozle Engine and Core APIs."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        events_url: Optional[str] = None,
+        timeout: float = 10,
+        *,
+        host: str = "https://api.nozle.app",
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
+        _session: Optional[requests.Session] = None,
+    ) -> None:
+        api_key = _resolve_api_key(api_key)
+        self._session = _session or requests.Session()
+        self._owns_session = _session is None
+        session = self._session
+        super().__init__(
+            api_key,
+            base_url,
+            events_url,
+            timeout,
+            host,
+            lambda url: HttpTransport(
+                url,
+                api_key,
+                timeout=timeout,
+                session=session,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
+            ),
+        )
+
+    def capture_http_client(self, **options: Any) -> Any:
+        """Return a new httpx client that records LLM token usage (``module="httpx2"`` for httpx2).
+
+        See :func:`nozle.integrations.capture.capture_http_client`.
+        """
+        from nozle.integrations.capture import capture_http_client
+
+        return capture_http_client(self, **options)
+
+    def close(self) -> None:
+        if self._owns_session:
+            self._session.close()
+
+    def __enter__(self) -> Nozle:
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        self.close()
+
+
+class AsyncNozle(_BaseNozle[Async]):
+    """Asyncio backend SDK for Nozle Engine and Core APIs: the methods of ``Nozle``, awaited.
+
+    Requests go through ``httpx.AsyncClient`` (``pip install 'nozle-sdk[httpx]'``). Use it as
+    ``async with AsyncNozle() as nozle:`` or call ``await nozle.aclose()`` when done.
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        events_url: Optional[str] = None,
+        timeout: float = 10,
+        *,
+        host: str = "https://api.nozle.app",
+        max_retries: int = 0,
+        retry_delay: float = 0.5,
+        _client: Optional[httpx.AsyncClient] = None,
+    ) -> None:
+        api_key = _resolve_api_key(api_key)
+        try:
+            import httpx
+        except ImportError as error:
+            raise ImportError("AsyncNozle needs httpx: pip install 'nozle-sdk[httpx]'") from error
+        self._client = _client or httpx.AsyncClient()
+        self._owns_client = _client is None
+        client = self._client
+        super().__init__(
+            api_key,
+            base_url,
+            events_url,
+            timeout,
+            host,
+            lambda url: AsyncHttpTransport(
+                url,
+                api_key,
+                timeout=timeout,
+                client=client,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
+            ),
+        )
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+    async def __aenter__(self) -> AsyncNozle:
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        await self.aclose()
+
+
+__all__ = ["Nozle", "AsyncNozle", "CustomerUpsertResult"]

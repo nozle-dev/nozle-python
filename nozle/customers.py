@@ -2,25 +2,22 @@ from __future__ import annotations
 
 from typing import cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import require_non_empty, require_secret_key
 from nozle.types import CustomerBillingConfiguration, CustomerUpsertResult
 
 
-class CustomersNamespace:
+class CustomersNamespace(Resource[M]):
     """Create or update customers through the backend-only API."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
+    @endpoint
     def upsert(
         self,
         external_id: str,
         name: str | None = None,
         email: str | None = None,
         billing_configuration: CustomerBillingConfiguration | None = None,
-    ) -> CustomerUpsertResult:
+    ) -> Steps[CustomerUpsertResult]:
         operation = "customers.upsert"
         require_secret_key(self._api_key, operation)
         require_non_empty(external_id, "external_id", operation)
@@ -38,7 +35,7 @@ class CustomersNamespace:
             customer["billing_configuration"] = {
                 key: value for key, value in billing_configuration.items() if value is not None
             }
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation,
             "POST",
             "/api/v1/customers",

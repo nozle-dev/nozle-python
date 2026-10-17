@@ -7,11 +7,11 @@ import binascii
 import hashlib
 import hmac
 import json
-import threading
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Tuple, Union
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
+from nozle._transport import BaseTransport
 from nozle._validation import require_secret_key
 
 
@@ -146,27 +146,27 @@ def _event(body: bytes, event_id: str) -> NozleWebhookEvent:
     )
 
 
-class WebhooksNamespace:
+class WebhooksNamespace(Resource[M]):
     """Verifies webhooks Nozle sends to your endpoint."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
+    def __init__(self, transport: BaseTransport[M], api_key: str) -> None:
+        super().__init__(transport, api_key)
         self._public_key: Optional[Tuple[int, int]] = None
-        self._lock = threading.Lock()
 
+    @endpoint
     def verify(
         self,
         body: Union[bytes, str],
         headers: Headers,
         *,
         hmac_key: Optional[str] = None,
-    ) -> NozleWebhookEvent:
+    ) -> Steps[NozleWebhookEvent]:
         """Checks ``X-Nozle-Signature`` against the raw body and returns the event.
 
         Pass the body exactly as received; parsed and re-serialised JSON fails the check. ``hmac``
         endpoints need the organization's ``hmac_key``. ``jwt`` endpoints need nothing: the public
-        key is read once from Core with your secret key and cached. Raises
+        key is read once from Core with your secret key and cached, so on ``AsyncNozle`` this
+        method is awaited. Raises
         ``WebhookVerificationError`` when the request is not genuine.
         """
         signature = _header(headers, "x-nozle-signature")
@@ -188,10 +188,10 @@ class WebhooksNamespace:
                     "invalid_signature", "webhook signature does not match"
                 )
         elif algorithm == "jwt":
-            valid = _jwt_matches(raw, signature, self._key())
+            valid = _jwt_matches(raw, signature, (yield from self._key()))
             if not valid:
                 # The key may have been rotated since it was cached: read it again once.
-                valid = _jwt_matches(raw, signature, self._key(refresh=True))
+                valid = _jwt_matches(raw, signature, (yield from self._key(refresh=True)))
             if not valid:
                 raise WebhookVerificationError(
                     "invalid_signature", "webhook signature does not match"
@@ -202,13 +202,16 @@ class WebhooksNamespace:
             )
         return _event(raw, event_id)
 
-    def _key(self, refresh: bool = False) -> Tuple[int, int]:
-        with self._lock:
-            if refresh or self._public_key is None:
-                require_secret_key(self._api_key, "webhooks.verify")
-                response = self._transport.request(
-                    "webhooks.public_key", "GET", "/api/v1/webhooks/json_public_key"
-                )
-                encoded = ((response or {}).get("webhook") or {}).get("public_key") or ""
-                self._public_key = _rsa_public_key(base64.b64decode(encoded).decode("utf-8"))
-            return self._public_key
+    def _key(self, refresh: bool = False) -> Steps[Tuple[int, int]]:
+        # No lock: a lock held across the request would block the event loop on AsyncNozle.
+        # Two first calls at once may both read the key; each stores the same value.
+        key = self._public_key
+        if refresh or key is None:
+            require_secret_key(self._api_key, "webhooks.verify")
+            response = yield self._transport.call(
+                "webhooks.public_key", "GET", "/api/v1/webhooks/json_public_key"
+            )
+            encoded = ((response or {}).get("webhook") or {}).get("public_key") or ""
+            key = _rsa_public_key(base64.b64decode(encoded).decode("utf-8"))
+            self._public_key = key
+        return key

@@ -5,42 +5,58 @@
 record the token usage of each successful LLM response. ``capture_http_client`` builds a new
 client the same way. Requests pass through unchanged. Usage is recognised by the shape of the
 response, so any OpenAI-compatible API, Anthropic and Gemini work without naming the provider.
-Recording runs in a background thread and never changes or fails the provider response.
+Recording runs in a background thread (with ``AsyncNozle``, a task on the event loop) and never
+changes or fails the provider response.
 """
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 import sys
 import threading
 import time
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, Iterator, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncIterator,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+    Set,
+    Union,
+)
 
+from nozle._operation import Steps, run_async, run_sync
 from nozle.integrations._common import (
     DetectedUsage,
     StreamUsageCollector,
-    capture_provider_usage,
-    check_feature_once,
+    capture_usage_steps,
+    check_feature_steps,
     detect_usage,
+    is_async_client,
     warn_tracking_failure,
 )
 
 if TYPE_CHECKING:
-    from nozle.client import Nozle
+    from nozle.client import AsyncNozle, Nozle
 
 CustomerResolver = Union[str, Callable[[Any], Optional[str]], None]
 
 _CUSTOMER_HEADER = "x-nozle-customer-id"
 _FEATURE_HEADER = "x-nozle-feature"
 _MAX_JSON_BYTES = 10 * 1024 * 1024
+# The event loop keeps only weak references to tasks; these keep AsyncNozle recordings alive.
+_recording: Set[asyncio.Task[Any]] = set()
 
 
 class _Options:
     def __init__(
         self,
-        nozle: Nozle,
+        nozle: Union[Nozle, AsyncNozle],
         customer_id: CustomerResolver,
         feature_code: str,
         feature: Optional[str],
@@ -120,8 +136,16 @@ class _Call:
         except Exception as error:
             self.options.report(error)
             return
-        if found is not None:
-            threading.Thread(target=self._record, args=(found,), daemon=True).start()
+        if found is None:
+            return
+        steps = self._record(found)
+        if is_async_client(self.options.nozle):
+            # Runs on the event loop that owns AsyncNozle's httpx client.
+            task = asyncio.get_running_loop().create_task(run_async(steps))
+            _recording.add(task)
+            task.add_done_callback(_recording.discard)
+        else:
+            threading.Thread(target=run_sync, args=(steps,), daemon=True).start()
 
     def _line(self, line: str) -> None:
         if self._done or not line.startswith("data:"):
@@ -137,23 +161,25 @@ class _Call:
         except ValueError:
             return
 
-    def _record(self, found: DetectedUsage) -> None:
+    def _record(self, found: DetectedUsage) -> Steps[None]:
         options = self.options
-        for error in capture_provider_usage(
-            options.nozle,
-            self.customer_id,
-            options.feature_code,
-            feature=self.feature,
-            cost_meter_code=options.cost_meter_code,
-            provider=found.format,
-            provider_host=self.host,
-            model=found.model or self.model,
-            request_id=found.id,
-            usage=found.usage,
-            latency_ms=int((time.monotonic() - self.started) * 1000),
+        for error in (
+            yield from capture_usage_steps(
+                options.nozle,
+                self.customer_id,
+                options.feature_code,
+                feature=self.feature,
+                cost_meter_code=options.cost_meter_code,
+                provider=found.format,
+                provider_host=self.host,
+                model=found.model or self.model,
+                request_id=found.id,
+                usage=found.usage,
+                latency_ms=int((time.monotonic() - self.started) * 1000),
+            )
         ):
             options.report(error)
-        setup_error = check_feature_once(options.nozle, options.feature_code)
+        setup_error = yield from check_feature_steps(options.nozle, options.feature_code)
         if setup_error is not None:
             options.report(setup_error)
 
@@ -331,7 +357,7 @@ def _client_module(client: Any) -> ModuleType:
 
 def wrap_http_client(
     client: Any,
-    nozle: Nozle,
+    nozle: Union[Nozle, AsyncNozle],
     *,
     customer_id: CustomerResolver = None,
     feature_code: str = "llm_tokens",
@@ -350,10 +376,12 @@ def wrap_http_client(
     and so does a ``feature_not_found`` error, once per event code, when no Feature has the code.
     """
     http = _client_module(client)
+    kind = "async" if isinstance(client, http.AsyncClient) else "sync"
+    if kind == "sync" and is_async_client(nozle):
+        raise TypeError("AsyncNozle records usage from an httpx AsyncClient; use Nozle here")
     options = _Options(
         nozle, customer_id, feature_code, feature, cost_meter_code, include_stream_usage, on_error
     )
-    kind = "async" if isinstance(client, http.AsyncClient) else "sync"
     transport_class = _classes(http)[kind]
     client._transport = transport_class(client._transport, options)
     # Proxy mounts carry their own transports; wrap them too so every route is observed.
@@ -373,7 +401,9 @@ def capture_http_client(nozle: Nozle, *, module: str = "httpx", **options: Any) 
     return wrap_http_client(http.Client(**client_kwargs), nozle, **capture)
 
 
-def capture_async_http_client(nozle: Nozle, *, module: str = "httpx", **options: Any) -> Any:
+def capture_async_http_client(
+    nozle: Union[Nozle, AsyncNozle], *, module: str = "httpx", **options: Any
+) -> Any:
     """The async form of :func:`capture_http_client`, for ``AsyncOpenAI`` and the like."""
     http = _module(module)
     capture, client_kwargs = _split(options)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import (
     path_segment,
     require_non_empty,
@@ -25,42 +25,44 @@ from nozle.types import (
 )
 
 
-class EntitySubscriptionsNamespace:
+class EntitySubscriptionsNamespace(Resource[M]):
     """Manage first-class Nozle subscriptions owned by customer Entities."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
-    def ensure(self, customer_id: str, entity_id: str) -> EntitySubscription:
+    @endpoint
+    def ensure(self, customer_id: str, entity_id: str) -> Steps[EntitySubscription]:
         operation = "entity_subscriptions.ensure"
         self._validate_path(customer_id, entity_id, operation)
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation, "PUT", self._entity_path(customer_id, entity_id)
         )
         return cast(EntitySubscription, payload["entity_subscription"])
 
-    def get(self, customer_id: str, entity_id: str) -> EntitySubscription:
+    @endpoint
+    def get(self, customer_id: str, entity_id: str) -> Steps[EntitySubscription]:
         operation = "entity_subscriptions.get"
         self._validate_path(customer_id, entity_id, operation)
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation, "GET", self._entity_path(customer_id, entity_id)
         )
         return cast(EntitySubscription, payload["entity_subscription"])
 
-    def list(self, customer_id: str) -> EntitySubscriptionList:
+    @endpoint
+    def list(self, customer_id: str) -> Steps[EntitySubscriptionList]:
         operation = "entity_subscriptions.list"
         require_secret_key(self._api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
         return cast(
             EntitySubscriptionList,
-            self._transport.request(
-                operation,
-                "GET",
-                f"/api/v1/customers/{path_segment(customer_id)}/entity-subscriptions",
+            (
+                yield self._transport.call(
+                    operation,
+                    "GET",
+                    f"/api/v1/customers/{path_segment(customer_id)}/entity-subscriptions",
+                )
             ),
         )
 
+    @endpoint
     def checkout(
         self,
         customer_id: str,
@@ -71,18 +73,21 @@ class EntitySubscriptionsNamespace:
         billing_time: str | None = None,
         idempotency_key: str | None = None,
         register_mandate: bool | None = None,
-    ) -> CheckoutResult:
-        return self._change(
-            "checkout",
-            customer_id,
-            entity_id,
-            plan_code=plan_code,
-            return_url=return_url,
-            billing_time=billing_time,
-            idempotency_key=idempotency_key,
-            register_mandate=register_mandate,
+    ) -> Steps[CheckoutResult]:
+        return (
+            yield from self._change(
+                "checkout",
+                customer_id,
+                entity_id,
+                plan_code=plan_code,
+                return_url=return_url,
+                billing_time=billing_time,
+                idempotency_key=idempotency_key,
+                register_mandate=register_mandate,
+            )
         )
 
+    @endpoint
     def checkout_many(
         self,
         customer_id: str,
@@ -91,7 +96,7 @@ class EntitySubscriptionsNamespace:
         idempotency_key: str,
         return_url: str | None = None,
         billing_time: str | None = None,
-    ) -> EntitySubscriptionCheckoutManyResult:
+    ) -> Steps[EntitySubscriptionCheckoutManyResult]:
         operation = "entity_subscriptions.checkout_many"
         require_secret_key(self._api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -118,7 +123,7 @@ class EntitySubscriptionsNamespace:
             plan_code = require_non_empty(plan_code, "items[].plan_code", operation).strip()
             request_items.append({"external_entity_id": entity_id, "plan_code": plan_code})
 
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation,
             "POST",
             f"/api/v1/customers/{path_segment(customer_id)}/entity-subscriptions/checkout",
@@ -136,6 +141,7 @@ class EntitySubscriptionsNamespace:
             payload["entity_subscription_checkout"],
         )
 
+    @endpoint
     def change_plan(
         self,
         customer_id: str,
@@ -145,17 +151,20 @@ class EntitySubscriptionsNamespace:
         return_url: str | None = None,
         billing_time: str | None = None,
         idempotency_key: str | None = None,
-    ) -> CheckoutResult:
-        return self._change(
-            "change-plan",
-            customer_id,
-            entity_id,
-            plan_code=plan_code,
-            return_url=return_url,
-            billing_time=billing_time,
-            idempotency_key=idempotency_key,
+    ) -> Steps[CheckoutResult]:
+        return (
+            yield from self._change(
+                "change-plan",
+                customer_id,
+                entity_id,
+                plan_code=plan_code,
+                return_url=return_url,
+                billing_time=billing_time,
+                idempotency_key=idempotency_key,
+            )
         )
 
+    @endpoint
     def cancel(
         self,
         customer_id: str,
@@ -166,34 +175,39 @@ class EntitySubscriptionsNamespace:
         credit_action: SubscriptionTransitionCreditAction | None = None,
         refund_mode: SubscriptionTransitionRefundMode | None = None,
         final_invoice_action: SubscriptionTransitionFinalInvoiceAction | None = None,
-    ) -> EntitySubscriptionCancelResult:
+    ) -> Steps[EntitySubscriptionCancelResult]:
         operation = "entity_subscriptions.cancel"
         self._validate_path(customer_id, entity_id, operation)
         validate_idempotency_key(idempotency_key, operation)
         return cast(
             EntitySubscriptionCancelResult,
-            self._transport.request(
-                operation,
-                "POST",
-                f"{self._entity_path(customer_id, entity_id)}/cancel",
-                json_body={
-                    "timing": timing,
-                    "credit_action": credit_action,
-                    "refund_mode": refund_mode,
-                    "final_invoice_action": final_invoice_action,
-                },
-                headers={"Idempotency-Key": idempotency_key},
+            (
+                yield self._transport.call(
+                    operation,
+                    "POST",
+                    f"{self._entity_path(customer_id, entity_id)}/cancel",
+                    json_body={
+                        "timing": timing,
+                        "credit_action": credit_action,
+                        "refund_mode": refund_mode,
+                        "final_invoice_action": final_invoice_action,
+                    },
+                    headers={"Idempotency-Key": idempotency_key},
+                )
             ),
         )
 
-    def remove(self, customer_id: str, entity_id: str) -> None:
+    @endpoint
+    def remove(self, customer_id: str, entity_id: str) -> Steps[None]:
         operation = "entity_subscriptions.remove"
         self._validate_path(customer_id, entity_id, operation)
-        self._transport.request(
-            operation,
-            "DELETE",
-            self._entity_path(customer_id, entity_id),
-            expect_json=False,
+        (
+            yield self._transport.call(
+                operation,
+                "DELETE",
+                self._entity_path(customer_id, entity_id),
+                expect_json=False,
+            )
         )
 
     def _change(
@@ -207,7 +221,7 @@ class EntitySubscriptionsNamespace:
         billing_time: str | None = None,
         idempotency_key: str | None = None,
         register_mandate: bool | None = None,
-    ) -> CheckoutResult:
+    ) -> Steps[CheckoutResult]:
         operation = f"entity_subscriptions.{action.replace('-', '_')}"
         self._validate_path(customer_id, entity_id, operation)
         require_non_empty(plan_code, "plan_code", operation)
@@ -219,17 +233,19 @@ class EntitySubscriptionsNamespace:
             headers = {"Idempotency-Key": idempotency_key}
         return cast(
             CheckoutResult,
-            self._transport.request(
-                operation,
-                "POST",
-                f"{self._entity_path(customer_id, entity_id)}/{action}",
-                json_body={
-                    "plan_code": plan_code,
-                    "return_url": return_url,
-                    "billing_time": billing_time,
-                    "register_mandate": register_mandate,
-                },
-                headers=headers,
+            (
+                yield self._transport.call(
+                    operation,
+                    "POST",
+                    f"{self._entity_path(customer_id, entity_id)}/{action}",
+                    json_body={
+                        "plan_code": plan_code,
+                        "return_url": return_url,
+                        "billing_time": billing_time,
+                        "register_mandate": register_mandate,
+                    },
+                    headers=headers,
+                )
             ),
         )
 

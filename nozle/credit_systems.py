@@ -2,27 +2,24 @@ from __future__ import annotations
 
 from typing import Any, List, Mapping
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import require_secret_key
 from nozle.errors import NozleAPIError
 from nozle.types import CreditSystem
 
 
-class CreditSystemsNamespace:
+class CreditSystemsNamespace(Resource[M]):
     """Read all active Credit Systems from Core, following every page."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
-    def list(self) -> List[CreditSystem]:
+    @endpoint
+    def list(self) -> Steps[List[CreditSystem]]:
         operation = "credit_systems.list"
         require_secret_key(self._api_key, operation)
         systems: List[CreditSystem] = []
         page = 1
 
         while page > 0:
-            payload = self._transport.request(
+            payload = yield self._transport.call(
                 operation,
                 "GET",
                 "/api/v1/credit-systems",

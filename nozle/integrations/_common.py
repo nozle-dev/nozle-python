@@ -6,8 +6,11 @@ import warnings
 import weakref
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import partial
 from typing import Any, Dict, Mapping, Optional
 from urllib.parse import quote
+
+from nozle._operation import Steps, run_async, run_sync
 
 
 class NozleTrackingWarning(RuntimeWarning):
@@ -233,7 +236,22 @@ def safe_capture_provider_usage(
         warn_tracking_failure(error)
 
 
+def is_async_client(nozle: Any) -> bool:
+    from nozle.client import AsyncNozle
+
+    return isinstance(nozle, AsyncNozle)
+
+
 def capture_provider_usage(
+    nozle: Any, customer_id: str, feature_code: str, **options: Any
+) -> list[Exception]:
+    """Record one usage event and its cost events; return the delivery errors instead of raising."""
+    if is_async_client(nozle):
+        return [TypeError("AsyncNozle records usage only from async code; use Nozle here")]
+    return run_sync(capture_usage_steps(nozle, customer_id, feature_code, **options))
+
+
+def capture_usage_steps(
     nozle: Any,
     customer_id: str,
     feature_code: str,
@@ -246,8 +264,9 @@ def capture_provider_usage(
     usage: ProviderTokenUsage,
     latency_ms: int,
     provider_host: Optional[str] = None,
-) -> list[Exception]:
-    """Record one usage event and its cost events; return the delivery errors instead of raising."""
+) -> Steps[list[Exception]]:
+    """``capture_provider_usage`` for ``Nozle`` and ``AsyncNozle``: each yield is one client call
+    (see ``nozle._operation``)."""
     errors: list[Exception] = []
     properties = tracking_properties(
         provider=provider,
@@ -264,7 +283,7 @@ def capture_provider_usage(
 
     if not request_id and not cost_meter_code:
         try:
-            nozle.track(customer_id, feature_code, metadata=properties)
+            yield partial(nozle.track, customer_id, feature_code, metadata=properties)
         except Exception as error:  # tracking must not corrupt a successful provider response
             errors.append(error)
         return errors
@@ -275,7 +294,8 @@ def capture_provider_usage(
     )
     occurred_at = datetime.now(timezone.utc)
     try:
-        nozle.track(
+        yield partial(
+            nozle.track,
             customer_id,
             feature_code,
             metadata=properties,
@@ -291,7 +311,8 @@ def capture_provider_usage(
     resolved_request_id = str(request_id) if request_id else None
     for token_type, tokens in usage.categories:
         try:
-            nozle.cost_events.track(
+            yield partial(
+                nozle.cost_events.track,
                 cost_meter_code=cost_meter_code,
                 parent_transaction_id=transaction_id,
                 request_id=resolved_request_id,
@@ -315,6 +336,11 @@ async def safe_capture_provider_usage_async(
     feature_code: str,
     **kwargs: Any,
 ) -> None:
+    if is_async_client(nozle):
+        steps = capture_usage_steps(nozle, customer_id, feature_code, **kwargs)
+        for error in await run_async(steps):
+            warn_tracking_failure(error)
+        return
     await asyncio.to_thread(
         safe_capture_provider_usage,
         nozle,
@@ -342,7 +368,13 @@ async def safe_track_async(
     metric_code: str,
     properties: Dict[str, Any],
 ) -> None:
-    await asyncio.to_thread(safe_track, nozle, customer_id, metric_code, properties)
+    if not is_async_client(nozle):
+        await asyncio.to_thread(safe_track, nozle, customer_id, metric_code, properties)
+        return
+    try:
+        await nozle.track(customer_id, metric_code, metadata=properties)
+    except Exception as error:  # tracking must not corrupt a successful provider response
+        warn_tracking_failure(error)
 
 
 def token_count(raw_value: Any) -> int:
@@ -380,6 +412,11 @@ def check_feature_once(nozle: Any, feature_code: str) -> Optional[Exception]:
     The usage is then stored but never billed. Reads Core's ``GET /features/{code}``; any other
     answer, including a key without read permission, returns None.
     """
+    return run_sync(check_feature_steps(nozle, feature_code))
+
+
+def check_feature_steps(nozle: Any, feature_code: str) -> Steps[Optional[Exception]]:
+    """``check_feature_once`` for ``Nozle`` and ``AsyncNozle`` (see ``nozle._operation``)."""
     transport = getattr(nozle, "_events", None)
     if transport is None:
         return None
@@ -394,8 +431,11 @@ def check_feature_once(nozle: Any, feature_code: str) -> Optional[Exception]:
     from nozle.errors import NozleAPIError
 
     try:
-        transport.request(
-            "feature lookup", "GET", f"/api/v1/features/{quote(feature_code, safe='')}"
+        yield partial(
+            transport.request,
+            "feature lookup",
+            "GET",
+            f"/api/v1/features/{quote(feature_code, safe='')}",
         )
     except NozleAPIError as error:
         if error.status_code == 404:

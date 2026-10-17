@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import path_segment, require_non_empty, require_secret_key
 from nozle.errors import NozleAPIError
 from nozle.types import Alert, AlertPage
@@ -13,14 +13,11 @@ Threshold = Mapping[str, Any]
 """``{"value": ..., "code": optional str, "recurring": optional bool}``."""
 
 
-class AlertsNamespace:
+class AlertsNamespace(Resource[M]):
     """Usage alerts belong to a subscription (``subscription_id``); balance alerts to one of a
     customer's wallets (``customer_id`` and ``wallet_code``)."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
+    @endpoint
     def list(
         self,
         *,
@@ -29,11 +26,12 @@ class AlertsNamespace:
         wallet_code: Optional[str] = None,
         page: Optional[int] = None,
         per_page: Optional[int] = None,
-    ) -> AlertPage:
+    ) -> Steps[AlertPage]:
         params = {k: v for k, v in (("page", page), ("per_page", per_page)) if v is not None}
         path = _base(subscription_id, customer_id, wallet_code)
-        return cast(AlertPage, self._call("alerts.list", "GET", path, params=params))
+        return cast(AlertPage, (yield from self._call("alerts.list", "GET", path, params=params)))
 
+    @endpoint
     def get(
         self,
         code: str,
@@ -41,10 +39,11 @@ class AlertsNamespace:
         subscription_id: Optional[str] = None,
         customer_id: Optional[str] = None,
         wallet_code: Optional[str] = None,
-    ) -> Alert:
+    ) -> Steps[Alert]:
         path = _one(subscription_id, customer_id, wallet_code, code)
-        return cast(Alert, self._call("alerts.get", "GET", path)["alert"])
+        return cast(Alert, (yield from self._call("alerts.get", "GET", path))["alert"])
 
+    @endpoint
     def create(
         self,
         alert_type: str,
@@ -56,15 +55,19 @@ class AlertsNamespace:
         subscription_id: Optional[str] = None,
         customer_id: Optional[str] = None,
         wallet_code: Optional[str] = None,
-    ) -> Alert:
+    ) -> Steps[Alert]:
         """``feature_code`` is required for the ``feature_*`` alert types."""
         body = {
             "alert_type": alert_type,
             **_fields(code=code, name=name, feature_code=feature_code, thresholds=thresholds),
         }
         path = _base(subscription_id, customer_id, wallet_code)
-        return cast(Alert, self._call("alerts.create", "POST", path, body={"alert": body})["alert"])
+        return cast(
+            Alert,
+            (yield from self._call("alerts.create", "POST", path, body={"alert": body}))["alert"],
+        )
 
+    @endpoint
     def update(
         self,
         code: str,
@@ -76,12 +79,16 @@ class AlertsNamespace:
         subscription_id: Optional[str] = None,
         customer_id: Optional[str] = None,
         wallet_code: Optional[str] = None,
-    ) -> Alert:
+    ) -> Steps[Alert]:
         """Thresholds, when given, replace the existing ones."""
         body = _fields(code=new_code, name=name, feature_code=feature_code, thresholds=thresholds)
         path = _one(subscription_id, customer_id, wallet_code, code)
-        return cast(Alert, self._call("alerts.update", "PUT", path, body={"alert": body})["alert"])
+        return cast(
+            Alert,
+            (yield from self._call("alerts.update", "PUT", path, body={"alert": body}))["alert"],
+        )
 
+    @endpoint
     def delete(
         self,
         code: str,
@@ -89,9 +96,9 @@ class AlertsNamespace:
         subscription_id: Optional[str] = None,
         customer_id: Optional[str] = None,
         wallet_code: Optional[str] = None,
-    ) -> Alert:
+    ) -> Steps[Alert]:
         path = _one(subscription_id, customer_id, wallet_code, code)
-        return cast(Alert, self._call("alerts.delete", "DELETE", path)["alert"])
+        return cast(Alert, (yield from self._call("alerts.delete", "DELETE", path))["alert"])
 
     def _call(
         self,
@@ -101,9 +108,9 @@ class AlertsNamespace:
         *,
         params: Optional[Dict[str, Any]] = None,
         body: Optional[Dict[str, Any]] = None,
-    ) -> Mapping[str, Any]:
+    ) -> Steps[Mapping[str, Any]]:
         require_secret_key(self._api_key, operation)
-        payload = self._transport.request(operation, method, path, params=params, json_body=body)
+        payload = yield self._transport.call(operation, method, path, params=params, json_body=body)
         if not isinstance(payload, Mapping):
             raise NozleAPIError(operation, 200, "response was not a JSON object")
         return payload

@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Any, Optional
 
-from nozle._transport import HttpTransport
+from nozle._operation import Steps, run_sync
+from nozle._transport import BaseTransport, HttpTransport
 from nozle._validation import require_non_empty, require_secret_key
 from nozle.errors import NozleValidationError
 from nozle.identifiers import create_transaction_id
@@ -53,6 +54,30 @@ def track(
     transaction_id: Optional[str] = None,
     timestamp: Optional[str] = None,
 ) -> str:
+    return run_sync(
+        track_steps(
+            transport,
+            api_key,
+            customer_id,
+            event,
+            metadata,
+            subscription_id,
+            transaction_id,
+            timestamp,
+        )
+    )
+
+
+def track_steps(
+    transport: BaseTransport[Any],
+    api_key: str,
+    customer_id: str,
+    event: str,
+    metadata: Optional[JSONMapping] = None,
+    subscription_id: Optional[str] = None,
+    transaction_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
+) -> Steps[str]:
     operation = "track"
     require_secret_key(api_key, operation)
     require_non_empty(customer_id, "customer_id", operation)
@@ -71,7 +96,7 @@ def track(
     if timestamp:
         body["timestamp"] = _event_timestamp(timestamp)
 
-    transport.request(
+    yield transport.call(
         operation,
         "POST",
         "/api/v1/events",

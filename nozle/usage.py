@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Optional, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
+from nozle._transport import BaseTransport
 from nozle._validation import (
     require_non_empty,
     require_secret_key,
@@ -14,18 +15,18 @@ from nozle._validation import (
 from nozle.types import JSONMapping, UsageCheckResult, UsageTrackResult
 
 
-class UsageNamespace:
+class UsageNamespace(Resource[M]):
     """Check ledger usage without mutation or consume credits idempotently."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
+    def __init__(self, transport: BaseTransport[M], api_key: str) -> None:
+        super().__init__(transport, api_key)
         # Timestamps the SDK filled in, by idempotency key, so a retry of a key sends the same
         # request.
         # shortcut: lives in this client's memory, so a retry from another process must pass
         # `timestamp`; keeps the last 1000 keys.
         self._generated_timestamps: OrderedDict[str, str] = OrderedDict()
-        self._api_key = api_key
 
+    @endpoint
     def check(
         self,
         customer_id: str,
@@ -35,7 +36,7 @@ class UsageNamespace:
         credit_system_code: Optional[str] = None,
         properties: Optional[JSONMapping] = None,
         occurred_at: Optional[str] = None,
-    ) -> UsageCheckResult:
+    ) -> Steps[UsageCheckResult]:
         operation = "usage.check"
         require_secret_key(self._api_key, operation)
         self._validate(customer_id, entity_id, feature_code, operation)
@@ -51,11 +52,14 @@ class UsageNamespace:
             body["credit_system_code"] = credit_system_code
         return cast(
             UsageCheckResult,
-            self._transport.request(
-                operation, "POST", "/api/v1/usage/check", json_body=body, idempotent=True
+            (
+                yield self._transport.call(
+                    operation, "POST", "/api/v1/usage/check", json_body=body, idempotent=True
+                )
             ),
         )
 
+    @endpoint
     def track(
         self,
         customer_id: str,
@@ -66,7 +70,7 @@ class UsageNamespace:
         credit_system_code: Optional[str] = None,
         properties: Optional[JSONMapping] = None,
         timestamp: Optional[str] = None,
-    ) -> UsageTrackResult:
+    ) -> Steps[UsageTrackResult]:
         operation = "usage.track"
         require_secret_key(self._api_key, operation)
         self._validate(customer_id, entity_id, feature_code, operation)
@@ -83,12 +87,14 @@ class UsageNamespace:
             body["credit_system_code"] = credit_system_code
         return cast(
             UsageTrackResult,
-            self._transport.request(
-                operation,
-                "POST",
-                "/api/v1/usage/track",
-                json_body=body,
-                headers={"Idempotency-Key": idempotency_key},
+            (
+                yield self._transport.call(
+                    operation,
+                    "POST",
+                    "/api/v1/usage/track",
+                    json_body=body,
+                    headers={"Idempotency-Key": idempotency_key},
+                )
             ),
         )
 

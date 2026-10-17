@@ -4,6 +4,7 @@
 
 ### Added
 
+- `AsyncNozle`: the `Nozle` client for asyncio apps (FastAPI and the like). Same options (`api_key` or `NOZLE_SECRET_KEY`, `host`, `base_url`, `events_url`, `timeout`, `max_retries`, `retry_delay`), namespaces and methods, awaited; `async with AsyncNozle() as nozle:` or `await nozle.aclose()`. Requests go through `httpx.AsyncClient` (`pip install 'nozle-sdk[httpx]'`) and retries wait with `asyncio.sleep`. Each call is written once and runs on both clients, so validation, errors, retries, idempotency keys, timestamps and left-out unset fields are the same. `webhooks.verify` is awaited on `AsyncNozle` (a `jwt` endpoint reads the public key). `capture_async_http_client` and `wrap_http_client` on an `httpx.AsyncClient` record usage on the event loop with `AsyncNozle`. `Nozle` is unchanged.
 - `invoices.list(..., payment_overdue=True)` keeps only unpaid invoices past their due date.
 - `nozle.alerts.list / get / create / update / delete` manage subscription usage alerts (`subscription_id=`) and wallet balance alerts (`customer_id=`, `wallet_code=`).
 - `nozle.invoices.list(customer_id, ...)`, `get(invoice_id)` and `download_url(invoice_id)` (the PDF URL, or `None` while it is generated). Typed as `Invoice` and `InvoicePage`.

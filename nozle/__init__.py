@@ -1,6 +1,6 @@
 from nozle._version import __version__
 from nozle.alerts import AlertsNamespace
-from nozle.client import Nozle
+from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
@@ -106,6 +106,7 @@ __all__ = [
     "Alert",
     "AlertPage",
     "AlertsNamespace",
+    "AsyncNozle",
     "Invoice",
     "InvoicePage",
     "InvoicesNamespace",
