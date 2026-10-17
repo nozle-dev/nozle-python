@@ -1,19 +1,17 @@
 # Nozle Python SDK
 
-Feature Event writes use the Go Engine at `https://api.nozle.app/engine/api/v1/events` (batch: `/events/batch`). Configure `base_url` for a custom ingestion endpoint. `events_url` configures Core billing resources and subscription discovery.
-
 Backend-only Python SDK for Nozle billing, exact-decimal credits, Entity lifecycle,
 ledger usage, margin intelligence, and LLM usage capture.
 
 ## Install
 
 ```bash
-pip install nozle-sdk==0.10.0
+pip install nozle-sdk==0.13.0
 ```
 
 Python 3.9 through 3.13 are supported. The package is typed and includes `py.typed`.
 
-Version `0.9.1` converts RFC 3339 Feature Event timestamps to the Unix-second format Core accepts, including events created by the OpenAI and Anthropic wrappers. See the [changelog](CHANGELOG.md).
+Version `0.13.0` adds `AsyncNozle` for asyncio apps, the `host` option, reading `NOZLE_SECRET_KEY`, opt-in retries, `NozleAPIError.request_id` and `retry_after`, invoices, usage and wallet alerts, `current_usage` and `past_usage`, webhook verification, and LLM usage capture for any httpx client. See the [changelog](CHANGELOG.md).
 
 ## Authentication
 
@@ -30,12 +28,7 @@ browser-supplied customer ID as authoritative.
 ```python
 from nozle import Nozle
 
-nozle = Nozle(
-    api_key="sk_backend_...",
-    base_url="https://api.nozle.app/engine",
-    events_url="https://api.nozle.app/core",
-    timeout=15,
-)
+nozle = Nozle(timeout=15)  # reads NOZLE_SECRET_KEY; host defaults to https://api.nozle.app
 ```
 
 ## Async client
