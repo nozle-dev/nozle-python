@@ -174,7 +174,6 @@ class _SubscriptionOptionsRequired(TypedDict):
 
 class SubscriptionOptions(_SubscriptionOptionsRequired, total=False):
     checkout: Optional[SubscriptionCheckoutSummary]
-    blocked_reason: Optional[str]
 
 
 class SubscriptionChangePreview(TypedDict):
@@ -434,13 +433,9 @@ class EntitySubscriptionCancelResult(TypedDict):
     subscription_transition: SubscriptionTransitionResultBody
 
 
-class _PingResultRequired(TypedDict):
+class PingResult(TypedDict):
     ok: bool
     engine: str
-
-
-class PingResult(_PingResultRequired, total=False):
-    version: str
 
 
 class _CustomerBillingConfigurationRequired(TypedDict):
@@ -746,3 +741,75 @@ class UsageTrackResult(_UsageTrackResultRequired, total=False):
     remaining: str
     reason: str
     deductions: List[UsageDeduction]
+
+
+class _CustomerUsageRequired(TypedDict):
+    from_datetime: str
+    to_datetime: str
+    issuing_date: str
+    amount_cents: int
+    taxes_amount_cents: int
+    total_amount_cents: int
+    # Each item has units, amount_cents, amount_currency, charge and feature (API reference).
+    charges_usage: List[Dict[str, Any]]
+
+
+class CustomerUsage(_CustomerUsageRequired, total=False):
+    """Usage of one billing period: Core ``current_usage`` or one ``past_usage`` item."""
+
+    currency: str
+    invoice_id: Optional[str]
+
+
+class _InvoiceRequired(TypedDict):
+    nozle_id: str
+    number: str
+    issuing_date: str
+    status: str
+    payment_status: str
+    currency: str
+    fees_amount_cents: int
+    taxes_amount_cents: int
+    total_amount_cents: int
+
+
+class Invoice(_InvoiceRequired, total=False):
+    """An invoice. The API reference lists every field; these are the ones most code reads."""
+
+    payment_due_date: Optional[str]
+    payment_overdue: bool
+    file_url: Optional[str]
+    customer: Dict[str, Any]
+
+
+class InvoicePage(TypedDict):
+    invoices: List[Invoice]
+    meta: Dict[str, Any]
+
+
+class AlertThreshold(TypedDict):
+    code: Optional[str]
+    value: str
+    recurring: bool
+
+
+class Alert(TypedDict, total=False):
+    """A usage or wallet-balance alert."""
+
+    nozle_id: str
+    alert_type: str
+    code: str
+    name: Optional[str]
+    external_subscription_id: Optional[str]
+    wallet_code: Optional[str]
+    direction: str
+    previous_value: Any
+    last_processed_at: Optional[str]
+    thresholds: List[AlertThreshold]
+    feature: Optional[Dict[str, Any]]
+    created_at: str
+
+
+class AlertPage(TypedDict):
+    alerts: List[Alert]
+    meta: Dict[str, Any]

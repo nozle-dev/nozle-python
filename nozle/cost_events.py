@@ -2,21 +2,18 @@ from __future__ import annotations
 
 from typing import Mapping, Optional, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import require_non_empty, require_secret_key
 from nozle.errors import NozleAPIError, NozleValidationError
 from nozle.identifiers import create_cost_event_id
 from nozle.types import CostEventAccepted, JSONMapping
 
 
-class CostEventsNamespace:
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
-
+class CostEventsNamespace(Resource[M]):
     def create_cost_event_id(self) -> str:
         return create_cost_event_id()
 
+    @endpoint
     def track(
         self,
         *,
@@ -28,7 +25,7 @@ class CostEventsNamespace:
         operation_key: Optional[str] = None,
         properties: Optional[JSONMapping] = None,
         timestamp: Optional[float] = None,
-    ) -> CostEventAccepted:
+    ) -> Steps[CostEventAccepted]:
         operation = "cost_events.track"
         require_secret_key(self._api_key, operation)
         require_non_empty(cost_meter_code, "cost_meter_code", operation)
@@ -54,11 +51,12 @@ class CostEventsNamespace:
         }
         body.update({key: value for key, value in optional_values.items() if value is not None})
 
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation,
             "POST",
             "/api/v1/cost-events",
             json_body=body,
+            idempotent=True,
         )
         if not isinstance(payload, Mapping):
             raise NozleAPIError(operation, 202, "response was not a JSON object")

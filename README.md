@@ -1,19 +1,17 @@
 # Nozle Python SDK
 
-Feature Event writes use the Go Engine at `https://api.nozle.app/engine/api/v1/events` (batch: `/events/batch`). Configure `base_url` for a custom ingestion endpoint. `events_url` configures Core billing resources and subscription discovery.
-
 Backend-only Python SDK for Nozle billing, exact-decimal credits, Entity lifecycle,
 ledger usage, margin intelligence, and LLM usage capture.
 
 ## Install
 
 ```bash
-pip install nozle-sdk==0.10.0
+pip install nozle-sdk==0.13.0
 ```
 
 Python 3.9 through 3.13 are supported. The package is typed and includes `py.typed`.
 
-Version `0.9.1` converts RFC 3339 Feature Event timestamps to the Unix-second format Core accepts, including events created by the OpenAI and Anthropic wrappers. See the [changelog](CHANGELOG.md).
+Version `0.13.0` adds `AsyncNozle` for asyncio apps, the `host` option, reading `NOZLE_SECRET_KEY`, opt-in retries, `NozleAPIError.request_id` and `retry_after`, invoices, usage and wallet alerts, `current_usage` and `past_usage`, webhook verification, and LLM usage capture for any httpx client. See the [changelog](CHANGELOG.md).
 
 ## Authentication
 
@@ -30,13 +28,36 @@ browser-supplied customer ID as authoritative.
 ```python
 from nozle import Nozle
 
-nozle = Nozle(
-    api_key="sk_backend_...",
-    base_url="https://api.nozle.app/engine",
-    events_url="https://api.nozle.app/core",
-    timeout=15,
-)
+nozle = Nozle(timeout=15)  # reads NOZLE_SECRET_KEY; host defaults to https://api.nozle.app
 ```
+
+## Async client
+
+`AsyncNozle` has the same constructor options, namespaces and methods as `Nozle`; each
+call that reaches the API is awaited. It sends requests with `httpx.AsyncClient`, so
+install the `httpx` extra. Validation, errors (`NozleAPIError` with `request_id` and
+`retry_after`), opt-in retries and idempotency rules are the same; retries wait with
+`asyncio.sleep`, so they never block the event loop.
+
+```bash
+pip install "nozle-sdk[httpx]"
+```
+
+```python
+from nozle import AsyncNozle
+
+async with AsyncNozle(max_retries=2) as nozle:  # reads NOZLE_SECRET_KEY
+    allowed = await nozle.can("customer-123", "export")
+    await nozle.usage.track("customer-123", "emails", idempotency_key=message_id)
+    invoices = await nozle.invoices.list("customer-123")
+```
+
+Without `async with`, call `await nozle.aclose()` when you are done. `nozle.events.create_transaction_id()`
+and `nozle.cost_events.create_cost_event_id()` make no request and are not awaited.
+`await nozle.webhooks.verify(body, headers)` is awaited because a `jwt` endpoint reads
+Nozle's public key once. `nozle.capture_async_http_client(...)` and
+`nozle.wrap_http_client(httpx.AsyncClient(...))` record LLM usage through the same event
+loop; `AsyncNozle` does not wrap a synchronous `httpx.Client`, use `Nozle` there.
 
 ## Public namespaces
 

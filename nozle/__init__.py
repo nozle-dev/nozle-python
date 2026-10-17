@@ -1,5 +1,6 @@
 from nozle._version import __version__
-from nozle.client import Nozle
+from nozle.alerts import AlertsNamespace
+from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
@@ -17,8 +18,11 @@ from nozle.events import EventsNamespace
 from nozle.integrations import NozleTrackingWarning
 from nozle.integrations.anthropic import wrap_anthropic
 from nozle.integrations.openai import wrap_openai
+from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.types import (
+    Alert,
+    AlertPage,
     CancellationPolicy,
     CancelSubscriptionResult,
     CanResult,
@@ -45,6 +49,7 @@ from nozle.types import (
     CustomerEntityStatus,
     CustomerEntityUpsertData,
     CustomerUpsertResult,
+    CustomerUsage,
     EligibleSubscriptionPlan,
     EntityCreditBalance,
     EntityCreditBalances,
@@ -60,6 +65,8 @@ from nozle.types import (
     EntitySubscriptionList,
     EntitySubscriptionPlan,
     HostedCheckoutResult,
+    Invoice,
+    InvoicePage,
     JSONMapping,
     ManagedSubscription,
     PendingSubscriptionChange,
@@ -93,8 +100,20 @@ from nozle.types import (
     WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
+from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "Alert",
+    "AlertPage",
+    "AlertsNamespace",
+    "AsyncNozle",
+    "Invoice",
+    "InvoicePage",
+    "InvoicesNamespace",
+    "CustomerUsage",
+    "NozleWebhookEvent",
+    "WebhooksNamespace",
+    "WebhookVerificationError",
     "CancellationPolicy",
     "CancelSubscriptionResult",
     "CanResult",

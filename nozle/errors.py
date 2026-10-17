@@ -31,10 +31,16 @@ class NozleAPIError(NozleError):
         operation: str,
         status_code: int,
         response_details: Optional[Any] = None,
+        request_id: Optional[str] = None,
+        retry_after: Optional[float] = None,
     ) -> None:
         self.operation = operation
         self.status_code = status_code
         self.response_details = response_details
+        #: The ``X-Request-Id`` response header, when the service sent one. Quote it to support.
+        self.request_id = request_id
+        #: Seconds to wait before retrying, from the ``Retry-After`` header, when it was sent.
+        self.retry_after = retry_after
         detail = ""
         if response_details not in (None, "", {}):
             detail = f": {response_details!r}"

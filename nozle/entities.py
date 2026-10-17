@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Sequence, Union, cast
 
-from nozle._transport import HttpTransport
+from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import (
     path_segment,
     require_non_empty,
@@ -24,18 +24,18 @@ from nozle.types import (
 )
 
 
-class EntitiesNamespace:
+class EntitiesNamespace(Resource[M]):
     """Read and idempotently manage customer Entities."""
 
-    def __init__(self, transport: HttpTransport, api_key: str) -> None:
-        self._transport = transport
-        self._api_key = api_key
+    @endpoint
+    def get(self, customer_id: str, entity_id: str) -> Steps[CustomerEntity]:
+        return (yield from self._get(customer_id, entity_id))
 
-    def get(self, customer_id: str, entity_id: str) -> CustomerEntity:
+    def _get(self, customer_id: str, entity_id: str) -> Steps[CustomerEntity]:
         operation = "entities.get"
         require_secret_key(self._api_key, operation)
         self._validate_path(customer_id, entity_id, operation)
-        payload = self._transport.request(
+        payload = yield self._transport.call(
             operation,
             "GET",
             self._entity_path(customer_id, entity_id),
@@ -44,6 +44,7 @@ class EntitiesNamespace:
             raise NozleAPIError(operation, 200, "response did not contain an entity")
         return cast(CustomerEntity, payload["entity"])
 
+    @endpoint
     def list(
         self,
         customer_id: str,
@@ -51,7 +52,7 @@ class EntitiesNamespace:
         status: Optional[CustomerEntityStatus] = None,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
-    ) -> CustomerEntityPage:
+    ) -> Steps[CustomerEntityPage]:
         operation = "entities.list"
         require_secret_key(self._api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -67,14 +68,17 @@ class EntitiesNamespace:
             params["cursor"] = cursor
         return cast(
             CustomerEntityPage,
-            self._transport.request(
-                operation,
-                "GET",
-                f"/api/v1/customers/{path_segment(customer_id)}/entities",
-                params=params,
+            (
+                yield self._transport.call(
+                    operation,
+                    "GET",
+                    f"/api/v1/customers/{path_segment(customer_id)}/entities",
+                    params=params,
+                )
             ),
         )
 
+    @endpoint
     def upsert(
         self,
         customer_id: str,
@@ -84,7 +88,28 @@ class EntitiesNamespace:
         idempotency_key: str,
         name: Optional[str] = None,
         metadata: Optional[JSONMapping] = None,
-    ) -> CustomerEntityMutationResult:
+    ) -> Steps[CustomerEntityMutationResult]:
+        return (
+            yield from self._upsert(
+                customer_id,
+                entity_id,
+                status=status,
+                idempotency_key=idempotency_key,
+                name=name,
+                metadata=metadata,
+            )
+        )
+
+    def _upsert(
+        self,
+        customer_id: str,
+        entity_id: str,
+        *,
+        status: CustomerEntityStatus,
+        idempotency_key: str,
+        name: Optional[str] = None,
+        metadata: Optional[JSONMapping] = None,
+    ) -> Steps[CustomerEntityMutationResult]:
         operation = "entities.upsert"
         require_secret_key(self._api_key, operation)
         self._validate_path(customer_id, entity_id, operation)
@@ -92,64 +117,73 @@ class EntitiesNamespace:
         validate_idempotency_key(idempotency_key, operation)
         return cast(
             CustomerEntityMutationResult,
-            self._transport.request(
-                operation,
-                "PUT",
-                self._entity_path(customer_id, entity_id),
-                json_body={"name": name, "status": status, "metadata": metadata or {}},
-                headers={"Idempotency-Key": idempotency_key},
+            (
+                yield self._transport.call(
+                    operation,
+                    "PUT",
+                    self._entity_path(customer_id, entity_id),
+                    json_body={"name": name, "status": status, "metadata": metadata or {}},
+                    headers={"Idempotency-Key": idempotency_key},
+                )
             ),
         )
 
+    @endpoint
     def suspend(
         self,
         customer_id: str,
         entity_id: str,
         *,
         idempotency_key: str,
-    ) -> CustomerEntityMutationResult:
+    ) -> Steps[CustomerEntityMutationResult]:
         operation = "entities.suspend"
         require_secret_key(self._api_key, operation)
         self._validate_path(customer_id, entity_id, operation)
         validate_idempotency_key(idempotency_key, operation)
-        current = self.get(customer_id, entity_id)
-        return self.upsert(
-            customer_id,
-            entity_id,
-            status="suspended",
-            idempotency_key=idempotency_key,
-            name=current.get("name"),
-            metadata=current.get("metadata", {}),
+        current = yield from self._get(customer_id, entity_id)
+        return (
+            yield from self._upsert(
+                customer_id,
+                entity_id,
+                status="suspended",
+                idempotency_key=idempotency_key,
+                name=current.get("name"),
+                metadata=current.get("metadata", {}),
+            )
         )
 
+    @endpoint
     def activate(
         self,
         customer_id: str,
         entity_id: str,
         *,
         idempotency_key: str,
-    ) -> CustomerEntityMutationResult:
+    ) -> Steps[CustomerEntityMutationResult]:
         operation = "entities.activate"
         require_secret_key(self._api_key, operation)
         self._validate_path(customer_id, entity_id, operation)
         validate_idempotency_key(idempotency_key, operation)
-        current = self.get(customer_id, entity_id)
-        return self.upsert(
-            customer_id,
-            entity_id,
-            status="active",
-            idempotency_key=idempotency_key,
-            name=current.get("name"),
-            metadata=current.get("metadata", {}),
+        current = yield from self._get(customer_id, entity_id)
+        return (
+            yield from self._upsert(
+                customer_id,
+                entity_id,
+                status="active",
+                idempotency_key=idempotency_key,
+                name=current.get("name"),
+                metadata=current.get("metadata", {}),
+            )
         )
 
+    @endpoint
     def bulk_upsert(
         self,
         customer_id: str,
         entities: Sequence[CustomerEntityBulkUpsertItem],
         *,
         idempotency_key: str,
-    ) -> CustomerEntityBulkMutationResult:
+    ) -> Steps[CustomerEntityBulkMutationResult]:
         operation = "entities.bulk_upsert"
         require_secret_key(self._api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
@@ -185,12 +219,14 @@ class EntitiesNamespace:
 
         return cast(
             CustomerEntityBulkMutationResult,
-            self._transport.request(
-                operation,
-                "POST",
-                f"/api/v1/customers/{path_segment(customer_id)}/entities/bulk-upsert",
-                json_body={"entities": body},
-                headers={"Idempotency-Key": idempotency_key},
+            (
+                yield self._transport.call(
+                    operation,
+                    "POST",
+                    f"/api/v1/customers/{path_segment(customer_id)}/entities/bulk-upsert",
+                    json_body={"entities": body},
+                    headers={"Idempotency-Key": idempotency_key},
+                )
             ),
         )
 

@@ -703,3 +703,165 @@ def test_structured_api_error_is_safe_and_mutations_are_not_retried(
     assert error.response_details["api_key"] == "[REDACTED]"
     assert api_key not in str(error)
     assert matcher.call_count == 1
+
+
+def test_host_derives_both_service_urls_and_explicit_urls_win():
+    client = Nozle("sk_test", host="http://localhost:8888//")
+    assert client.base_url == "http://localhost:8888/engine"
+    assert client.events_url == "http://localhost:8888/core"
+
+    client = Nozle("sk_test", events_url="https://core.example/", host="http://localhost:8888")
+    assert client.base_url == "http://localhost:8888/engine"
+    assert client.events_url == "https://core.example"
+    assert Nozle("sk_test").base_url == "https://api.nozle.app/engine"
+
+
+def test_api_key_falls_back_to_environment(monkeypatch):
+    monkeypatch.setenv("NOZLE_SECRET_KEY", "sk_env")
+    assert Nozle().api_key == "sk_env"
+    assert Nozle("sk_explicit").api_key == "sk_explicit"
+    monkeypatch.delenv("NOZLE_SECRET_KEY")
+    with pytest.raises(ValueError, match="NOZLE_SECRET_KEY"):
+        Nozle()
+
+
+def test_api_error_carries_request_id_and_retry_after(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.get(
+        "https://api.example/engine/api/v1/plans",
+        status_code=503,
+        json={},
+        headers={"X-Request-Id": "req-1", "Retry-After": "30"},
+    )
+    with pytest.raises(NozleAPIError) as raised:
+        Nozle("sk_test", base_url="https://api.example/engine").plans()
+    assert raised.value.request_id == "req-1"
+    assert raised.value.retry_after == 30
+
+
+def test_retry_after_accepts_a_date_and_ignores_a_bad_value(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    soon = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=20), usegmt=True)
+    url = "https://api.example/engine/api/v1/plans"
+    requests_mock.get(
+        url,
+        [
+            {"status_code": 429, "json": {}, "headers": {"Retry-After": soon}},
+            {"status_code": 429, "json": {}, "headers": {"Retry-After": "soon"}},
+            {"status_code": 429, "json": {}},
+        ],
+    )
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    with pytest.raises(NozleAPIError) as dated:
+        client.plans()
+    assert 0 < dated.value.retry_after <= 20
+    with pytest.raises(NozleAPIError) as bad:
+        client.plans()
+    assert bad.value.retry_after is None
+    with pytest.raises(NozleAPIError) as missing:
+        client.plans()
+    assert missing.value.request_id is None and missing.value.retry_after is None
+
+
+def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> list:
+    waits: list = []
+    monkeypatch.setattr("nozle._transport.time.sleep", waits.append)
+    return waits
+
+
+def test_retries_are_off_by_default(requests_mock: requests_mock.Mocker) -> None:
+    matcher = requests_mock.get("https://api.example/engine/api/v1/plans", status_code=503, json={})
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test", base_url="https://api.example/engine").plans()
+    assert matcher.call_count == 1
+
+
+def test_a_read_is_retried_after_503_429_and_a_network_error(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import requests as http
+
+    _no_sleep(monkeypatch)
+    matcher = requests_mock.get(
+        "https://api.example/engine/api/v1/plans",
+        [
+            {"status_code": 503, "json": {}},
+            {"status_code": 429, "json": {}},
+            {"exc": http.ConnectionError("down")},
+            {"status_code": 200, "json": {"plans": []}},
+        ],
+    )
+    client = Nozle("sk_test", base_url="https://api.example/engine", max_retries=3)
+    assert client.plans() == []
+    assert matcher.call_count == 4
+
+
+def test_retries_stop_at_max_retries_and_skip_a_4xx(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _no_sleep(monkeypatch)
+    url = "https://api.example/engine/api/v1/plans"
+    matcher = requests_mock.get(url, status_code=500, json={})
+    client = Nozle("sk_test", base_url="https://api.example/engine", max_retries=2)
+    with pytest.raises(NozleAPIError) as raised:
+        client.plans()
+    assert raised.value.status_code == 500 and matcher.call_count == 3
+    matcher = requests_mock.get(url, status_code=422, json={})
+    with pytest.raises(NozleAPIError):
+        client.plans()
+    assert matcher.call_count == 1
+
+
+def test_retry_waits_for_retry_after(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits = _no_sleep(monkeypatch)
+    requests_mock.get(
+        "https://api.example/engine/api/v1/plans",
+        [
+            {"status_code": 503, "json": {}, "headers": {"Retry-After": "2"}},
+            {"status_code": 200, "json": {"plans": []}},
+        ],
+    )
+    Nozle("sk_test", base_url="https://api.example/engine", max_retries=1).plans()
+    assert waits == [2.0]
+
+
+def test_a_write_is_retried_only_when_it_is_safe_to_repeat(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _no_sleep(monkeypatch)
+    client = Nozle("sk_test", base_url="https://api.example/engine", max_retries=2)
+    checkout = requests_mock.post(
+        "https://api.example/engine/api/v1/subscribe", status_code=503, json={}
+    )
+    with pytest.raises(NozleAPIError):
+        client.subscribe("cust", "pro")
+    assert checkout.call_count == 1
+    usage = requests_mock.post(
+        "https://api.example/engine/api/v1/usage/track", status_code=503, json={}
+    )
+    with pytest.raises(NozleAPIError):
+        client.usage.track("cust", "f", idempotency_key="k1", timestamp="2026-10-15T10:00:00Z")
+    assert usage.call_count == 3
+
+
+def test_usage_track_reuses_its_timestamp_for_a_retry_of_the_same_key(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = iter(f"2026-10-15T10:00:0{i}.000Z" for i in range(9))
+    monkeypatch.setattr("nozle.usage.utc_now_rfc3339_milliseconds", lambda: next(clock))
+    matcher = requests_mock.post("https://api.example/engine/api/v1/usage/track", json={})
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    for key in ("k1", "k1", "k2"):
+        client.usage.track("cust", "emails", idempotency_key=key)
+    client.usage.track("cust", "emails", idempotency_key="k3", timestamp="2026-01-01T00:00:00Z")
+
+    stamps = [call.json()["timestamp"] for call in matcher.request_history]
+    assert stamps[0] == stamps[1]
+    assert stamps[2] != stamps[0]
+    assert stamps[3] == "2026-01-01T00:00:00Z"
