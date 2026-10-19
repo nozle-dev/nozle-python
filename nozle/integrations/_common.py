@@ -13,6 +13,40 @@ from urllib.parse import quote
 from nozle._operation import Steps, run_async, run_sync
 
 
+class ClientView:
+    """Reads every attribute from the wrapped object, except the ones replaced on the view."""
+
+    def __init__(self, original: Any, replaced: Dict[str, Any]) -> None:
+        self.__dict__.update(replaced)
+        self.__dict__["_nozle_original"] = original
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.__dict__["_nozle_original"], name)
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:  # keeps isinstance(view, OpenAI) true
+        return type(self.__dict__["_nozle_original"])
+
+
+def with_method(client: Any, path: tuple[str, ...], replacement: Any) -> Any:
+    """Return a view of ``client`` whose method at ``path`` calls ``replacement(original, ...)``.
+
+    The client passed in is never changed (the Go SDK returns a copy), so wrapping one shared
+    client per request keeps each wrapper's customer to its own calls. Wrapping a view wraps its
+    original client again, so wrappers never stack.
+    """
+    if type(client) is ClientView:
+        client = client.__dict__["_nozle_original"]
+
+    def view(target: Any, depth: int) -> Any:
+        name = path[depth]
+        child = getattr(target, name)
+        replaced = partial(replacement, child) if depth == len(path) - 1 else view(child, depth + 1)
+        return ClientView(target, {name: replaced})
+
+    return view(client, 0)
+
+
 class NozleTrackingWarning(RuntimeWarning):
     """A successful LLM response could not be reported to Nozle."""
 
