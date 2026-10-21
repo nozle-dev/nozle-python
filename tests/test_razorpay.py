@@ -167,3 +167,43 @@ def test_verify_checkout_rejects_a_missing_signature_field_before_any_request(fi
         with pytest.raises(NozleValidationError):
             Nozle("sk_test").verify_checkout("checkout", proof)  # type: ignore[arg-type]
         assert mock.call_count == 0
+
+
+def test_manage_payment_method_stripe_and_razorpay() -> None:
+    client = Nozle("sk_test", base_url="https://engine.example")
+    url = "https://engine.example/api/v1/customers/cust%2F1/payment-method/manage"
+    stripe = {"url": "https://billing.stripe.com/x", "expires_at": None, "provider": "stripe"}
+    razorpay = {
+        "url": None,
+        "expires_at": "2026-10-22T10:00:00Z",
+        "provider": "razorpay",
+        "checkout": {"type": "razorpay", "checkout_id": "c1", "order_id": "o1"},
+    }
+    with requests_mock.Mocker() as mock:
+        route = mock.post(url, json={"manage_payment_method": stripe})
+        assert (
+            client.manage_payment_method("cust/1", "https://app.example/back", idempotency_key="k1")
+            == stripe
+        )
+        assert route.last_request.json() == {"return_url": "https://app.example/back"}
+        assert route.last_request.headers["Idempotency-Key"] == "k1"
+        route = mock.post(url, json={"manage_payment_method": razorpay})
+        assert client.manage_payment_method("cust/1") == razorpay
+        assert route.last_request.body is None
+
+
+def test_manage_payment_method_errors() -> None:
+    with pytest.raises(NozleAuthenticationError):
+        Nozle("pk_browser").manage_payment_method("cust")
+    with pytest.raises(NozleValidationError):
+        Nozle("sk_test").manage_payment_method("")
+    client = Nozle("sk_test", base_url="https://engine.example", max_retries=0)
+    with requests_mock.Mocker() as mock:
+        mock.post(
+            "https://engine.example/api/v1/customers/cust/payment-method/manage",
+            status_code=422,
+            json={"error": "no_linked_payment_provider"},
+        )
+        with pytest.raises(NozleAPIError) as raised:
+            client.manage_payment_method("cust")
+    assert raised.value.status_code == 422
