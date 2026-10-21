@@ -344,6 +344,11 @@ response = openai.chat.completions.create(
 )
 ```
 
+`wrap_openai` and `wrap_anthropic` return a new client view and never change the
+client you pass in, so a server can keep one provider client and wrap it per request
+(`wrap_openai(shared_openai, nozle, customer_id=request.team_id)`). Calls on the
+original client record nothing.
+
 Synchronous clients, asynchronous clients, synchronous streams, and asynchronous
 streams are supported for OpenAI and Anthropic. The parent Feature Event contains:
 

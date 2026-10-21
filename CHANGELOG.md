@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.13.1 — 2026-10-19
+
+### Fixed
+
+- `wrap_openai` and `wrap_anthropic` no longer change the client passed in. They return a view of it whose `create` records usage for that wrapper's `customer_id`, as the Go SDK returns a copy; every other attribute is read from the original client, and `isinstance` checks still pass. Before, each wrap replaced `create` on the shared client, so after wrapping one client for several customers a single call recorded an event for every one of them. Calls on the original client now record nothing, and wrapping an already wrapped client wraps its original. Use the returned client: code that ignored the return value and kept calling the original client no longer records usage.
+
 ## 0.13.0 — 2026-10-17
 
 ### Added

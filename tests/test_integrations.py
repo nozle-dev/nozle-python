@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import warnings
 from types import SimpleNamespace
 from typing import Any, AsyncIterator
@@ -45,7 +46,7 @@ def test_openai_sync_response_tracks_node_event_properties() -> None:
     )
     provider = client_with_create(lambda **_: response, "openai")
     tracker = SimpleNamespace(track=Mock())
-    wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned = provider.chat.completions.create(model="gpt-5")
 
@@ -61,7 +62,7 @@ def test_openai_sync_stream_tracks_usage_from_final_chunk() -> None:
     create = Mock(side_effect=lambda **_: iter(chunks))
     provider = client_with_create(create, "openai")
     tracker = SimpleNamespace(track=Mock())
-    wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned = list(provider.chat.completions.create(model="gpt-stream", stream=True))
 
@@ -82,7 +83,7 @@ async def test_openai_async_response_tracks_without_corrupting_result() -> None:
 
     provider = client_with_create(create, "openai")
     tracker = SimpleNamespace(track=Mock())
-    wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned = await provider.chat.completions.create(model="gpt-async")
 
@@ -106,7 +107,7 @@ async def test_openai_async_stream_tracks_final_usage() -> None:
 
     provider = client_with_create(create, "openai")
     tracker = SimpleNamespace(track=Mock())
-    wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned_stream = await provider.chat.completions.create(model="gpt-stream", stream=True)
     returned = [chunk async for chunk in returned_stream]
@@ -122,7 +123,7 @@ def test_anthropic_sync_response_tracks_node_event_properties() -> None:
     )
     provider = client_with_create(lambda **_: response, "anthropic")
     tracker = SimpleNamespace(track=Mock())
-    wrap_anthropic(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_anthropic(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned = provider.messages.create(model="claude-sonnet")
 
@@ -140,7 +141,7 @@ def test_anthropic_sync_stream_tracks_start_and_delta_usage() -> None:
     ]
     provider = client_with_create(lambda **_: iter(events), "anthropic")
     tracker = SimpleNamespace(track=Mock())
-    wrap_anthropic(provider, tracker, customer_id="cust_1", feature="assistant")
+    provider = wrap_anthropic(provider, tracker, customer_id="cust_1", feature="assistant")
 
     returned = list(provider.messages.create(model="claude-stream", stream=True))
 
@@ -160,7 +161,7 @@ async def test_anthropic_async_response_and_stream_are_supported() -> None:
 
     response_provider = client_with_create(create_response, "anthropic")
     response_tracker = SimpleNamespace(track=Mock())
-    wrap_anthropic(
+    response_provider = wrap_anthropic(
         response_provider,
         response_tracker,
         customer_id="cust_1",
@@ -187,7 +188,7 @@ async def test_anthropic_async_response_and_stream_are_supported() -> None:
 
     stream_provider = client_with_create(create_stream, "anthropic")
     stream_tracker = SimpleNamespace(track=Mock())
-    wrap_anthropic(
+    stream_provider = wrap_anthropic(
         stream_provider,
         stream_tracker,
         customer_id="cust_1",
@@ -205,7 +206,7 @@ def test_tracking_failure_warns_without_changing_successful_llm_response() -> No
     )
     provider = client_with_create(lambda **_: response, "openai")
     tracker = SimpleNamespace(track=Mock(side_effect=RuntimeError("sk_must_not_leak")))
-    wrap_openai(provider, tracker, customer_id="cust_1")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1")
 
     with pytest.warns(NozleTrackingWarning) as warnings:
         returned = provider.chat.completions.create(model="gpt-5")
@@ -221,7 +222,7 @@ def test_tracking_failure_cannot_replace_success_when_warnings_are_errors() -> N
     )
     provider = client_with_create(lambda **_: response, "openai")
     tracker = SimpleNamespace(track=Mock(side_effect=RuntimeError("tracking unavailable")))
-    wrap_openai(provider, tracker, customer_id="cust_1")
+    provider = wrap_openai(provider, tracker, customer_id="cust_1")
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", NozleTrackingWarning)
@@ -236,7 +237,7 @@ def test_provider_failure_is_propagated_without_tracking() -> None:
 
     provider = client_with_create(create, "anthropic")
     tracker = SimpleNamespace(track=Mock())
-    wrap_anthropic(provider, tracker, customer_id="cust_1")
+    provider = wrap_anthropic(provider, tracker, customer_id="cust_1")
 
     with pytest.raises(RuntimeError, match="provider unavailable"):
         provider.messages.create(model="claude")
@@ -303,7 +304,7 @@ def test_openai_wrapper_links_detailed_cost_events_to_feature_event() -> None:
     )
     provider = client_with_create(lambda **_: response, "openai")
     tracker = cost_tracker()
-    wrap_openai(
+    provider = wrap_openai(
         provider,
         tracker,
         customer_id="cust_1",
@@ -341,7 +342,7 @@ def test_anthropic_wrapper_emits_cache_read_and_write_cost_events() -> None:
     )
     provider = client_with_create(lambda **_: response, "anthropic")
     tracker = cost_tracker()
-    wrap_anthropic(
+    provider = wrap_anthropic(
         provider,
         tracker,
         customer_id="cust_1",
@@ -354,3 +355,84 @@ def test_anthropic_wrapper_emits_cache_read_and_write_cost_events() -> None:
         call.kwargs["operation_key"] for call in tracker.cost_events.track.call_args_list
     }
     assert operation_keys == {"input", "cached_input", "cache_write", "output"}
+
+
+CUSTOMERS = ["cust_a", "cust_b", "cust_c"]
+
+
+def billed(track: Mock) -> list[str]:
+    return [call.args[0] for call in track.call_args_list]
+
+
+@pytest.mark.parametrize(
+    ("wrap", "provider", "path"),
+    [
+        (wrap_openai, "openai", ("chat", "completions")),
+        (wrap_anthropic, "anthropic", ("messages",)),
+    ],
+)
+def test_wrapping_a_shared_client_per_customer_records_each_call_once(
+    wrap: Any, provider: str, path: tuple[str, ...]
+) -> None:
+    response = SimpleNamespace(
+        model="model",
+        usage=SimpleNamespace(
+            prompt_tokens=1, completion_tokens=1, input_tokens=1, output_tokens=1
+        ),
+    )
+    original_create = Mock(return_value=response)
+    shared = client_with_create(original_create, provider)
+    tracker = SimpleNamespace(track=Mock())
+
+    def resource(client: Any) -> Any:
+        for name in path:
+            client = getattr(client, name)
+        return client
+
+    for customer_id in CUSTOMERS:
+        wrapped = wrap(shared, tracker, customer_id=customer_id)
+        resource(wrapped).create(model="model")
+        resource(wrapped).create(model="model")
+    resource(shared).create(model="model")
+
+    assert billed(tracker.track) == ["cust_a", "cust_a", "cust_b", "cust_b", "cust_c", "cust_c"]
+    assert resource(shared).create is original_create
+    assert original_create.call_count == 7
+
+
+def test_wrapping_a_wrapped_client_wraps_its_original() -> None:
+    response = SimpleNamespace(
+        model="m", usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1)
+    )
+    shared = client_with_create(lambda **_: response, "openai")
+    tracker = SimpleNamespace(track=Mock())
+
+    first = wrap_openai(shared, tracker, customer_id="cust_a")
+    wrap_openai(first, tracker, customer_id="cust_b").chat.completions.create(model="m")
+
+    assert billed(tracker.track) == ["cust_b"]
+    assert isinstance(first, SimpleNamespace)
+    assert first.chat.completions is not shared.chat.completions
+
+
+@pytest.mark.asyncio
+async def test_concurrent_streams_on_a_shared_client_bill_their_own_customer() -> None:
+    async def stream() -> AsyncIterator[Any]:
+        yield SimpleNamespace(usage=None)
+        await asyncio.sleep(0)
+        yield SimpleNamespace(usage=SimpleNamespace(prompt_tokens=2, completion_tokens=1))
+
+    async def create(**_: Any) -> Any:
+        return stream()
+
+    shared = client_with_create(create, "openai")
+    tracker = SimpleNamespace(track=Mock())
+
+    async def call(customer_id: str) -> None:
+        client = wrap_openai(shared, tracker, customer_id=customer_id)
+        async for _ in await client.chat.completions.create(model="m", stream=True):
+            pass
+
+    await asyncio.gather(*(call(customer_id) for customer_id in CUSTOMERS))
+
+    assert sorted(billed(tracker.track)) == CUSTOMERS

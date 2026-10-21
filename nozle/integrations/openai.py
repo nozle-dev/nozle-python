@@ -10,6 +10,7 @@ from nozle.integrations._common import (
     safe_capture_provider_usage,
     safe_capture_provider_usage_async,
     value,
+    with_method,
 )
 
 if TYPE_CHECKING:
@@ -27,9 +28,7 @@ def wrap_openai(
 ) -> Any:
     """Wrap synchronous or asynchronous OpenAI chat completions with safe tracking."""
 
-    original = client.chat.completions.create
-
-    def wrapped_create(*args: Any, **kwargs: Any) -> Any:
+    def wrapped_create(original: Any, *args: Any, **kwargs: Any) -> Any:
         started = time.monotonic()
         requested_model = call_parameter(args, kwargs, "model", "")
         is_stream = bool(call_parameter(args, kwargs, "stream", False))
@@ -85,8 +84,7 @@ def wrap_openai(
         )
         return result
 
-    client.chat.completions.create = wrapped_create
-    return client
+    return with_method(client, ("chat", "completions", "create"), wrapped_create)
 
 
 async def _await_result(
