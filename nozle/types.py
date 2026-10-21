@@ -266,6 +266,18 @@ CheckoutResult = Union[
 ]
 
 
+class _ManagePaymentMethodRequired(TypedDict):
+    url: Optional[str]
+    expires_at: Optional[str]
+    provider: Literal["razorpay", "stripe"]
+
+
+class ManagePaymentMethodResult(_ManagePaymentMethodRequired, total=False):
+    """Stripe: redirect to `url`. Razorpay: `url` is None; open Checkout from `checkout`."""
+
+    checkout: RazorpayCheckoutResult
+
+
 class _CheckoutStatusRequired(TypedDict):
     checkout_id: str
     provider: Literal["razorpay", "stripe"]

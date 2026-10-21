@@ -37,6 +37,7 @@ UNIVERSAL: Dict[str, Any] = {
     "meta": {},
     "invoice": {"lago_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
     "alert": {"code": "a1"},
+    "manage_payment_method": {"url": None, "expires_at": None, "provider": "stripe"},
     "entity": {"name": "User", "metadata": {"seat": 1}},
     "entity_subscription": {"external_entity_id": "user-42"},
     "entity_subscription_checkout": {"items": []},
@@ -76,6 +77,7 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.ping(),
     lambda n: n.checkout("cust", "pro", "https://app.example/b", idempotency_key="k1"),
     lambda n: n.checkout_invoice("inv_1", register_mandate=True),
+    lambda n: n.manage_payment_method("cust", "https://app.example/b", idempotency_key="m1"),
     lambda n: n.checkout_status("chk_1", customer_id="cust", subscription_id="sub_1"),
     lambda n: n.verify_checkout(
         "chk_1",
