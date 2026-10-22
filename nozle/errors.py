@@ -6,6 +6,10 @@ from typing import Any, Optional
 class NozleError(Exception):
     """Base exception for the Nozle SDK."""
 
+    #: Set by ``track()`` to the transaction ID it sent (generated or passed). Pass it back
+    #: as ``transaction_id`` when retrying, so the event is recorded once.
+    transaction_id: Optional[str] = None
+
 
 class NozleValidationError(NozleError, ValueError):
     """Raised before network I/O when a local SDK contract is invalid."""

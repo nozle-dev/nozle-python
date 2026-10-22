@@ -8,7 +8,7 @@ from typing import Any, Optional
 from nozle._operation import Steps, run_sync
 from nozle._transport import BaseTransport, HttpTransport
 from nozle._validation import require_non_empty, require_secret_key
-from nozle.errors import NozleValidationError
+from nozle.errors import NozleError, NozleValidationError
 from nozle.identifiers import create_transaction_id
 from nozle.types import JSONMapping
 
@@ -96,12 +96,17 @@ def track_steps(
     if timestamp:
         body["timestamp"] = _event_timestamp(timestamp)
 
-    yield transport.call(
-        operation,
-        "POST",
-        "/api/v1/events",
-        json_body={"event": body},
-        expect_json=False,
-        idempotent=True,
-    )
+    try:
+        yield transport.call(
+            operation,
+            "POST",
+            "/api/v1/events",
+            json_body={"event": body},
+            expect_json=False,
+            idempotent=True,
+        )
+    except NozleError as error:
+        # The event may have been stored; a retry with this ID is not recorded twice.
+        error.transaction_id = resolved_transaction_id
+        raise
     return resolved_transaction_id

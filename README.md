@@ -290,6 +290,24 @@ version 7 identifier before sending the request. This lets a Cost Event referenc
 Feature Event without waiting for a server response, and out-of-order delivery remains
 safe.
 
+If `track()` raises after the request was sent (an error response, a network error or a
+timeout), the event may still have been stored. The error carries the ID that was sent as
+`transaction_id`; retry with it so the event is recorded once. Pass a `timestamp` and reuse
+it on the retry too: without one, each attempt is stamped when it arrives.
+
+```python
+timestamp = "2026-10-22T12:00:00Z"
+try:
+    nozle.track("customer-123", "copilot_action", timestamp=timestamp)
+except NozleError as error:
+    nozle.track(
+        "customer-123",
+        "copilot_action",
+        timestamp=timestamp,
+        transaction_id=error.transaction_id,
+    )
+```
+
 You can generate both identifiers explicitly when coordinating asynchronous work:
 
 ```python
