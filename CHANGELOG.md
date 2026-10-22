@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.13.2 — 2026-10-22
+
+### Fixed
+
+- `CanResult.limit` and `CanResult.remaining` are typed `Optional[int]`. Engine sends `null` for both when the feature has no usage limit (a boolean feature, or a metered feature without a cap), so `None` means unlimited. Type checkers now flag code that uses them as numbers without checking for `None`; the values returned at runtime are unchanged.
+
 ## 0.13.1 — 2026-10-19
 
 ### Fixed
