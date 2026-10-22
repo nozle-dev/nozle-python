@@ -51,8 +51,9 @@ class CanResult(_CanResultRequired, total=False):
     reason: str
     feature_type: str
     configuration: Dict[str, str]
-    limit: int
-    remaining: int
+    # Engine always sends both; None means the feature has no usage limit (unlimited).
+    limit: Optional[int]
+    remaining: Optional[int]
     overage: bool
     economics: CanEconomics
     policy: CanPolicy

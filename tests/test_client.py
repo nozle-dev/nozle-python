@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from importlib.metadata import version
-from typing import Callable
+from typing import Callable, Optional
 from uuid import UUID
 
 import pytest
 import requests_mock
 
 from nozle import (
+    CanResult,
     Nozle,
     NozleAPIError,
     NozleAuthenticationError,
@@ -250,6 +251,27 @@ def test_can_sends_metadata_as_json_query(requests_mock: requests_mock.Mocker) -
         "feature": ["code_completion"],
         "metadata": ['{"model": "gpt-5"}'],
     }
+
+
+@pytest.mark.parametrize(
+    "limit,remaining",
+    [(None, None), (100, 97)],
+    ids=["unlimited", "capped"],
+)
+def test_can_limit_and_remaining_may_be_null(
+    requests_mock: requests_mock.Mocker, limit: Optional[int], remaining: Optional[int]
+) -> None:
+    # Engine always sends limit and remaining; both are null when the feature has no usage limit.
+    expected: CanResult = {"allowed": True, "used": 3, "limit": limit, "remaining": remaining}
+    requests_mock.get("https://api.example/engine/api/v1/can", json=expected)
+
+    result = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    ).can("cust_1", "seats")
+
+    assert result == expected
+    sent_limit: Optional[int] = result.get("limit")
+    assert sent_limit == limit
 
 
 @pytest.mark.parametrize(
