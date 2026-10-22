@@ -290,6 +290,24 @@ version 7 identifier before sending the request. This lets a Cost Event referenc
 Feature Event without waiting for a server response, and out-of-order delivery remains
 safe.
 
+If `track()` raises after the request was sent (an error response, a network error or a
+timeout), the event may still have been stored. The error carries the ID that was sent as
+`transaction_id`; retry with it so the event is recorded once. Pass a `timestamp` and reuse
+it on the retry too: without one, each attempt is stamped when it arrives.
+
+```python
+timestamp = "2026-10-22T12:00:00Z"
+try:
+    nozle.track("customer-123", "copilot_action", timestamp=timestamp)
+except NozleError as error:
+    nozle.track(
+        "customer-123",
+        "copilot_action",
+        timestamp=timestamp,
+        transaction_id=error.transaction_id,
+    )
+```
+
 You can generate both identifiers explicitly when coordinating asynchronous work:
 
 ```python
@@ -484,6 +502,12 @@ except NozleAPIError as error:
     else:
         raise
 ```
+
+**Manage payment method (Stripe only).** `manage_payment_method(customer_id, return_url)`
+returns `{"url", "expires_at", "provider": "stripe"}`; redirect the customer to `url` to add
+or replace their saved card. Razorpay customers pay each invoice by payment link, so for
+them it raises `NozleAPIError` (HTTP 422) where `error.has_code("razorpay_pays_by_link")`
+is true.
 
 See the [Stripe](https://docs.nozle.dev/integrations/stripe) and
 [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides for connection

@@ -40,6 +40,7 @@ from nozle.types import (
     CustomerUpsertResult,
     CustomerUsage,
     JSONMapping,
+    ManagePaymentMethodResult,
     PingResult,
     Plan,
     RazorpayVerification,
@@ -224,6 +225,39 @@ class _BaseNozle(Resource[M]):
                 )
             ),
         )
+
+    @endpoint
+    def manage_payment_method(
+        self,
+        customer_id: str,
+        return_url: Optional[str] = None,
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> Steps[ManagePaymentMethodResult]:
+        """Return a Stripe billing page `url` where the customer adds or replaces a payment method.
+
+        Stripe only. For a Razorpay customer (who pays each invoice by payment link) this
+        raises `NozleAPIError` with HTTP 422 and `has_code("razorpay_pays_by_link")`.
+        """
+        operation = "manage_payment_method"
+        require_secret_key(self.api_key, operation)
+        require_non_empty(customer_id, "customer_id", operation)
+        headers = None
+        if idempotency_key is not None:
+            validate_idempotency_key(idempotency_key, operation)
+            headers = {"Idempotency-Key": idempotency_key}
+        payload = yield self._engine.call(
+            operation,
+            "POST",
+            f"/api/v1/customers/{quote(customer_id, safe='')}/payment-method/manage",
+            json_body={"return_url": return_url} if return_url else None,
+            headers=headers,
+        )
+        if not isinstance(payload, Mapping) or not isinstance(
+            payload.get("manage_payment_method"), Mapping
+        ):
+            raise NozleAPIError(operation, 200, "response had no manage_payment_method")
+        return cast(ManagePaymentMethodResult, payload["manage_payment_method"])
 
     @endpoint
     def verify_checkout(

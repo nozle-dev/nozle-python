@@ -37,6 +37,11 @@ UNIVERSAL: Dict[str, Any] = {
     "meta": {},
     "invoice": {"lago_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
     "alert": {"code": "a1"},
+    "manage_payment_method": {
+        "url": "https://billing.stripe.com/x",
+        "expires_at": None,
+        "provider": "stripe",
+    },
     "entity": {"name": "User", "metadata": {"seat": 1}},
     "entity_subscription": {"external_entity_id": "user-42"},
     "entity_subscription_checkout": {"items": []},
@@ -76,6 +81,7 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.ping(),
     lambda n: n.checkout("cust", "pro", "https://app.example/b", idempotency_key="k1"),
     lambda n: n.checkout_invoice("inv_1", register_mandate=True),
+    lambda n: n.manage_payment_method("cust", "https://app.example/b", idempotency_key="m1"),
     lambda n: n.checkout_status("chk_1", customer_id="cust", subscription_id="sub_1"),
     lambda n: n.verify_checkout(
         "chk_1",
@@ -288,6 +294,32 @@ async def test_track_resolves_and_caches_the_subscription() -> None:
     ]
     event = json.loads(seen[1].content)["event"]
     assert event["external_subscription_id"] == "sub_9" and event["transaction_id"] == transaction
+
+
+async def test_track_errors_carry_the_transaction_id_for_a_safe_retry() -> None:
+    sent: List[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["event"]["transaction_id"])
+        if len(sent) == 1:
+            return httpx.Response(502, json={})
+        if len(sent) == 2:
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(200, text="accepted")
+
+    nozle = async_client(handler)
+    with pytest.raises(NozleAPIError) as api_error:
+        await nozle.track("cust", "api_calls", subscription_id="sub_1")
+    generated = api_error.value.transaction_id
+    assert generated
+    with pytest.raises(NozleTransportError) as network_error:
+        await nozle.track("cust", "api_calls", subscription_id="sub_1", transaction_id=generated)
+    assert network_error.value.transaction_id == generated
+    retried = await nozle.track(
+        "cust", "api_calls", subscription_id="sub_1", transaction_id=generated
+    )
+    assert retried == generated
+    assert sent == [generated] * 3
 
 
 async def test_secret_key_comes_from_the_environment_and_host_sets_both_urls(

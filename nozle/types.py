@@ -51,8 +51,9 @@ class CanResult(_CanResultRequired, total=False):
     reason: str
     feature_type: str
     configuration: Dict[str, str]
-    limit: int
-    remaining: int
+    # Engine always sends both; None means the feature has no usage limit (unlimited).
+    limit: Optional[int]
+    remaining: Optional[int]
     overage: bool
     economics: CanEconomics
     policy: CanPolicy
@@ -264,6 +265,19 @@ CheckoutResult = Union[
     ProcessingCheckoutResult,
     HostedCheckoutResult,
 ]
+
+
+class ManagePaymentMethodResult(TypedDict):
+    """Stripe only: redirect the customer to `url`.
+
+    Razorpay customers pay each invoice by payment link, so for them
+    `manage_payment_method` raises `NozleAPIError` (HTTP 422) where
+    `has_code("razorpay_pays_by_link")` is true.
+    """
+
+    url: str
+    expires_at: Optional[str]
+    provider: Literal["stripe"]
 
 
 class _CheckoutStatusRequired(TypedDict):
