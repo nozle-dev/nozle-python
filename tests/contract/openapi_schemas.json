@@ -283,6 +283,148 @@
       "version_number"
     ]
   },
+  "PlanObject": {
+    "properties": [
+      "amount_cents",
+      "amount_currency",
+      "applicable_usage_thresholds",
+      "bill_charges_monthly",
+      "bill_fixed_charges_monthly",
+      "charges",
+      "code",
+      "created_at",
+      "credit_grant_rules",
+      "credit_pool_policies",
+      "description",
+      "entitlements",
+      "fixed_charges",
+      "interval",
+      "invoice_display_name",
+      "is_current",
+      "metadata",
+      "minimum_commitment",
+      "name",
+      "nozle_id",
+      "parent_id",
+      "pay_in_advance",
+      "pending_deletion",
+      "plan_family_code",
+      "taxes",
+      "trial_period",
+      "usage_thresholds",
+      "version"
+    ],
+    "required": [
+      "amount_cents",
+      "amount_currency",
+      "bill_charges_monthly",
+      "bill_fixed_charges_monthly",
+      "code",
+      "created_at",
+      "description",
+      "interval",
+      "invoice_display_name",
+      "name",
+      "nozle_id",
+      "parent_id",
+      "pay_in_advance",
+      "pending_deletion",
+      "trial_period"
+    ]
+  },
+  "PlanVersion": {
+    "properties": [
+      "active_subscriptions_count",
+      "amount_cents",
+      "amount_currency",
+      "created_at",
+      "is_current",
+      "nozle_id",
+      "version"
+    ],
+    "required": [
+      "active_subscriptions_count",
+      "amount_cents",
+      "amount_currency",
+      "created_at",
+      "is_current",
+      "nozle_id",
+      "version"
+    ]
+  },
+  "PlanVersionMigration": {
+    "properties": [
+      "canceled_at",
+      "created_at",
+      "failed_count",
+      "finished_at",
+      "from_version",
+      "items",
+      "matched_count",
+      "nozle_id",
+      "plan_code",
+      "skipped_count",
+      "started_at",
+      "status",
+      "succeeded_count",
+      "to_version"
+    ],
+    "required": [
+      "created_at",
+      "failed_count",
+      "from_version",
+      "matched_count",
+      "nozle_id",
+      "plan_code",
+      "skipped_count",
+      "status",
+      "succeeded_count",
+      "to_version"
+    ]
+  },
+  "PlanVersionMigrationItem": {
+    "properties": [
+      "effective_at",
+      "error",
+      "external_subscription_id",
+      "move_status",
+      "skip_reason",
+      "status"
+    ],
+    "required": [
+      "external_subscription_id",
+      "status"
+    ]
+  },
+  "PlanVersionMigrationPreview": {
+    "properties": [
+      "from_version",
+      "items",
+      "plan_code",
+      "to_version"
+    ],
+    "required": [
+      "from_version",
+      "items",
+      "plan_code",
+      "to_version"
+    ]
+  },
+  "PlanVersionMigrationPreviewItem": {
+    "properties": [
+      "current_amount_cents",
+      "effective_on",
+      "external_customer_id",
+      "external_subscription_id",
+      "new_amount_cents",
+      "outcome",
+      "skip_reason"
+    ],
+    "required": [
+      "external_subscription_id",
+      "outcome"
+    ]
+  },
   "PlatformCanResponse": {
     "properties": [
       "allowed",

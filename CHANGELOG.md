@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.16.0 — unreleased
+
+### Added
+
+- Plan versions. `Plan` has `version` and `is_current`; `plans()` returns current versions only.
+- `subscribe(customer_id, plan_code, *, plan_version=None)` sells a chosen version of the plan code instead of the current one (needs Engine 2.7.0). The same customer and code again keep the subscription's version; another version of an existing subscription raises `NozleAPIError` 422 (`plan_version_change_not_supported`), an unknown version 404 (`plan_version_not_found`).
+- `client.plan_versions` (secret keys): `list(code)` lists every version with its price and active subscriptions, `get(code, version)` reads one, and `preview_migration`, `create_migration`, `list_migrations`, `get_migration` and `cancel_migration` move the subscriptions of one version to another, each at the end of its billing period. Migration items carry `move_status` (`pending`, `moved`, `canceled`). A second migration of a code while one runs raises `NozleAPIError` 409 (`plan_version_migration_running`). Same on `AsyncNozle`.
+
 ## 0.15.0 — 2026-10-23
 
 ### Changed

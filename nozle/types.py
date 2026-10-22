@@ -59,12 +59,20 @@ class CanResult(_CanResultRequired, total=False):
     policy: CanPolicy
 
 
-class Plan(TypedDict):
+class _PlanRequired(TypedDict):
     code: str
     name: str
     amount_cents: int
     amount_currency: str
     interval: str
+
+
+class Plan(_PlanRequired, total=False):
+    #: The version of the code this plan is (plan versioning). ``plans()`` returns current versions
+    #: only.
+    version: int
+    #: Whether new subscriptions get this version.
+    is_current: bool
 
 
 class _StripeCheckoutRequired(TypedDict):
@@ -827,3 +835,67 @@ class Alert(TypedDict, total=False):
 class AlertPage(TypedDict):
     alerts: List[Alert]
     meta: Dict[str, Any]
+
+
+class PlanVersion(TypedDict):
+    """One version of a plan code, with its price and active subscriptions."""
+
+    nozle_id: str
+    version: int
+    is_current: bool
+    created_at: str
+    amount_cents: int
+    amount_currency: str
+    active_subscriptions_count: int
+
+
+class PlanVersionMigrationItem(TypedDict, total=False):
+    """What a migration did to one subscription. ``move_status`` says where a scheduled move stands:
+    ``pending``, ``moved`` or ``canceled``."""
+
+    external_subscription_id: str
+    status: Literal["succeeded", "skipped", "failed", "canceled"]
+    skip_reason: Optional[str]
+    error: Optional[str]
+    effective_at: Optional[str]
+    move_status: Optional[Literal["pending", "moved", "canceled"]]
+
+
+class PlanVersionMigration(TypedDict, total=False):
+    """A migration of one version's subscriptions to another. ``items`` only from
+    ``get_migration``."""
+
+    nozle_id: str
+    plan_code: str
+    from_version: int
+    to_version: int
+    status: Literal["running", "succeeded", "completed_with_errors", "failed", "canceled"]
+    matched_count: int
+    succeeded_count: int
+    skipped_count: int
+    failed_count: int
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    canceled_at: Optional[str]
+    created_at: str
+    items: List[PlanVersionMigrationItem]
+
+
+class PlanVersionMigrationPreviewItem(TypedDict, total=False):
+    """One subscription of a preview: ``outcome`` ``move`` (on ``effective_on``) or ``skip`` with a
+    reason."""
+
+    external_subscription_id: str
+    external_customer_id: str
+    outcome: Literal["move", "skip"]
+    skip_reason: Optional[str]
+    effective_on: Optional[str]
+    current_amount_cents: int
+    new_amount_cents: int
+
+
+class PlanVersionMigrationPreview(TypedDict):
+    plan_code: str
+    from_version: int
+    to_version: int
+    items: List[PlanVersionMigrationPreviewItem]

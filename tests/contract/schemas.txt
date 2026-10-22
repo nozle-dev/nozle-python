@@ -13,3 +13,9 @@ CreditsEntityBalanceList
 BillingSubscriptionOptionsResponse
 CustomerUsageObject
 InvoiceObject
+PlanObject
+PlanVersion
+PlanVersionMigration
+PlanVersionMigrationItem
+PlanVersionMigrationPreview
+PlanVersionMigrationPreviewItem

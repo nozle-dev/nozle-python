@@ -30,6 +30,12 @@ CONTRACT = {
     "SubscriptionOptions": "BillingSubscriptionOptionsResponse",
     "CustomerUsage": "CustomerUsageObject",
     "Invoice": "InvoiceObject",
+    "Plan": "PlanObject",
+    "PlanVersion": "PlanVersion",
+    "PlanVersionMigration": "PlanVersionMigration",
+    "PlanVersionMigrationItem": "PlanVersionMigrationItem",
+    "PlanVersionMigrationPreview": "PlanVersionMigrationPreview",
+    "PlanVersionMigrationPreviewItem": "PlanVersionMigrationPreviewItem",
 }
 
 
