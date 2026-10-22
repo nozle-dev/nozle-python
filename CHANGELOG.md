@@ -6,7 +6,7 @@
 
 ### Added
 
-- `manage_payment_method(customer_id, return_url=None, *, idempotency_key=None)` lets a customer add or replace their saved payment method. It returns `ManagePaymentMethodResult`: for Stripe, redirect the customer to `url`; for Razorpay, `url` is `None` and `checkout` holds the options to open Razorpay Checkout. Needs a secret key. Engine errors (`invalid_return_url`, `no_linked_payment_provider`, `provider_not_supported`, and the Razorpay mandate errors) raise `NozleAPIError`.
+- `manage_payment_method(customer_id, return_url=None, *, idempotency_key=None)` lets a Stripe customer add or replace their saved payment method. It returns `ManagePaymentMethodResult` (`url`, `expires_at`, `provider: "stripe"`): redirect the customer to `url`. Needs a secret key. Razorpay customers pay each invoice by payment link, so for them it raises `NozleAPIError` with HTTP 422 and `has_code("razorpay_pays_by_link")`. Other Engine errors (`invalid_return_url`, `no_linked_payment_provider`, `provider_not_supported`, `missing_payment_provider_customer`) also raise `NozleAPIError`.
 
 ## 0.13.1 — 2026-10-19
 

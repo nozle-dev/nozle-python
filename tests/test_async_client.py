@@ -37,7 +37,11 @@ UNIVERSAL: Dict[str, Any] = {
     "meta": {},
     "invoice": {"lago_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
     "alert": {"code": "a1"},
-    "manage_payment_method": {"url": None, "expires_at": None, "provider": "stripe"},
+    "manage_payment_method": {
+        "url": "https://billing.stripe.com/x",
+        "expires_at": None,
+        "provider": "stripe",
+    },
     "entity": {"name": "User", "metadata": {"seat": 1}},
     "entity_subscription": {"external_entity_id": "user-42"},
     "entity_subscription_checkout": {"items": []},

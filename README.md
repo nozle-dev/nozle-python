@@ -485,6 +485,12 @@ except NozleAPIError as error:
         raise
 ```
 
+**Manage payment method (Stripe only).** `manage_payment_method(customer_id, return_url)`
+returns `{"url", "expires_at", "provider": "stripe"}`; redirect the customer to `url` to add
+or replace their saved card. Razorpay customers pay each invoice by payment link, so for
+them it raises `NozleAPIError` (HTTP 422) where `error.has_code("razorpay_pays_by_link")`
+is true.
+
 See the [Stripe](https://docs.nozle.dev/integrations/stripe) and
 [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides for connection
 setup, webhooks, and limits.

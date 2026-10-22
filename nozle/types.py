@@ -266,16 +266,17 @@ CheckoutResult = Union[
 ]
 
 
-class _ManagePaymentMethodRequired(TypedDict):
-    url: Optional[str]
+class ManagePaymentMethodResult(TypedDict):
+    """Stripe only: redirect the customer to `url`.
+
+    Razorpay customers pay each invoice by payment link, so for them
+    `manage_payment_method` raises `NozleAPIError` (HTTP 422) where
+    `has_code("razorpay_pays_by_link")` is true.
+    """
+
+    url: str
     expires_at: Optional[str]
-    provider: Literal["razorpay", "stripe"]
-
-
-class ManagePaymentMethodResult(_ManagePaymentMethodRequired, total=False):
-    """Stripe: redirect to `url`. Razorpay: `url` is None; open Checkout from `checkout`."""
-
-    checkout: RazorpayCheckoutResult
+    provider: Literal["stripe"]
 
 
 class _CheckoutStatusRequired(TypedDict):

@@ -169,16 +169,10 @@ def test_verify_checkout_rejects_a_missing_signature_field_before_any_request(fi
         assert mock.call_count == 0
 
 
-def test_manage_payment_method_stripe_and_razorpay() -> None:
+def test_manage_payment_method_returns_the_stripe_url() -> None:
     client = Nozle("sk_test", base_url="https://engine.example")
     url = "https://engine.example/api/v1/customers/cust%2F1/payment-method/manage"
     stripe = {"url": "https://billing.stripe.com/x", "expires_at": None, "provider": "stripe"}
-    razorpay = {
-        "url": None,
-        "expires_at": "2026-10-22T10:00:00Z",
-        "provider": "razorpay",
-        "checkout": {"type": "razorpay", "checkout_id": "c1", "order_id": "o1"},
-    }
     with requests_mock.Mocker() as mock:
         route = mock.post(url, json={"manage_payment_method": stripe})
         assert (
@@ -187,8 +181,8 @@ def test_manage_payment_method_stripe_and_razorpay() -> None:
         )
         assert route.last_request.json() == {"return_url": "https://app.example/back"}
         assert route.last_request.headers["Idempotency-Key"] == "k1"
-        route = mock.post(url, json={"manage_payment_method": razorpay})
-        assert client.manage_payment_method("cust/1") == razorpay
+        result = client.manage_payment_method("cust/1")
+        assert result == stripe and "checkout" not in result
         assert route.last_request.body is None
 
 
@@ -207,3 +201,22 @@ def test_manage_payment_method_errors() -> None:
         with pytest.raises(NozleAPIError) as raised:
             client.manage_payment_method("cust")
     assert raised.value.status_code == 422
+
+
+def test_manage_payment_method_raises_razorpay_pays_by_link() -> None:
+    client = Nozle("sk_test", base_url="https://engine.example", max_retries=0)
+    with requests_mock.Mocker() as mock:
+        mock.post(
+            "https://engine.example/api/v1/customers/cust/payment-method/manage",
+            status_code=422,
+            json={
+                "status": 422,
+                "error": "Unprocessable Entity",
+                "code": "validation_errors",
+                "error_details": {"base": ["razorpay_pays_by_link"]},
+            },
+        )
+        with pytest.raises(NozleAPIError) as raised:
+            client.manage_payment_method("cust")
+    assert raised.value.status_code == 422
+    assert raised.value.has_code("razorpay_pays_by_link")
