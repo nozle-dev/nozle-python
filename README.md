@@ -93,19 +93,28 @@ never sends both fields and rejects conflicting values.
 Backend subscription creation remains available with `nozle.subscribe(customer_id,
 plan_code)`. Both checkout and subscription creation require an `sk_` key.
 
-Cancellation is also backend-only. It defaults to end-of-period behavior, preserving
-access until Nozle's authoritative billing boundary:
+Cancellation is also backend-only. Without a `policy`, the organization's cancellation
+timing applies (set in the dashboard; Nozle's default is immediate). Pass the timing to
+choose it per call:
 
 ```python
-result = nozle.cancel_subscription("customer-123", "subscription-123")
+result = nozle.cancel_subscription("customer-123", "subscription-123", policy="end_of_period")
 # result["subscription"]["status"] == "active"
 # result["subscription"]["ending_at"] contains the scheduled boundary
 ```
 
-Immediate termination must be explicit:
+Settlement options are optional too. Each one left out follows the subscription, then the
+organization's cancellation settings:
 
 ```python
-nozle.cancel_subscription("customer-123", "subscription-123", policy="immediate")
+nozle.cancel_subscription(
+    "customer-123",
+    "subscription-123",
+    policy="immediate",
+    credit_action="refund",  # credit, refund, offset or none
+    refund_mode="prorated",  # prorated or full
+    final_invoice_action="generate",  # generate or skip
+)
 ```
 
 Create one payment for a mixed basket of Entity plans:

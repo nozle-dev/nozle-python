@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- `cancel_subscription(customer_id, subscription_id)` without `policy` no longer sends `end_of_period`. It sends no timing, so the organization's cancellation timing applies (Nozle's default is `immediate`). Pass `policy="end_of_period"` to keep the previous behaviour. Same on `AsyncNozle`.
+
+### Added
+
+- `cancel_subscription` accepts keyword-only `credit_action` (`credit`, `refund`, `offset`, `none`), `refund_mode` (`prorated`, `full`) and `final_invoice_action` (`generate`, `skip`). Options left as `None` are not sent and follow the subscription, then the organization's cancellation settings. Needs Engine with nozle-dev/engine#144.
+
 ## 0.14.0 — 2026-10-22
 
 ### Added

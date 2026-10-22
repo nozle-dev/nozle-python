@@ -546,7 +546,7 @@ def test_subscription_changing_calls_refresh_the_cached_subscription(
     ]
 
 
-def test_cancel_subscription_defaults_to_end_of_period(
+def test_cancel_subscription_without_timing_follows_the_organization(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     requests_mock.delete(
@@ -565,9 +565,32 @@ def test_cancel_subscription_defaults_to_end_of_period(
 
     assert result["subscription"]["status"] == "active"
     assert result["subscription"]["ending_at"] == "2026-08-14T18:30:00Z"
+    assert requests_mock.last_request.qs == {"customer_id": ["customer 1"]}
+
+
+def test_cancel_subscription_forwards_settlement_options(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.delete(
+        "https://api.nozle.app/engine/api/v1/subscriptions/sub_1",
+        json={"subscription": {"external_id": "sub_1", "status": "terminated"}},
+    )
+
+    Nozle("sk_test").cancel_subscription(
+        "cust_1",
+        "sub_1",
+        "immediate",
+        credit_action="refund",
+        refund_mode="full",
+        final_invoice_action="skip",
+    )
+
     assert requests_mock.last_request.qs == {
-        "customer_id": ["customer 1"],
-        "cancellation_policy": ["end_of_period"],
+        "customer_id": ["cust_1"],
+        "cancellation_policy": ["immediate"],
+        "credit_action": ["refund"],
+        "refund_mode": ["full"],
+        "final_invoice_action": ["skip"],
     }
 
 
