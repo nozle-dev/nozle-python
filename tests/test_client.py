@@ -12,6 +12,7 @@ from nozle import (
     Nozle,
     NozleAPIError,
     NozleAuthenticationError,
+    NozleTransportError,
     NozleValidationError,
     __version__,
 )
@@ -111,6 +112,39 @@ def test_track_generates_transaction_id(requests_mock: requests_mock.Mocker) -> 
     assert len(requests_mock.last_request.json()["event"]["transaction_id"]) == 36
     assert transaction_id == requests_mock.last_request.json()["event"]["transaction_id"]
     assert UUID(transaction_id).version == 7
+
+
+def test_track_errors_carry_the_transaction_id_for_a_safe_retry(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    import requests as http
+
+    matcher = requests_mock.post(
+        "https://api.example/engine/api/v1/events",
+        [
+            {"status_code": 502, "json": {}},
+            {"exc": http.ConnectTimeout("timed out")},
+            {"status_code": 200, "text": "accepted"},
+        ],
+    )
+    client = Nozle(
+        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+    )
+
+    with pytest.raises(NozleAPIError) as api_error:
+        client.track("cust_1", "api_call", subscription_id="sub_1")
+    generated = api_error.value.transaction_id
+    assert generated is not None and UUID(generated).version == 7
+    with pytest.raises(NozleTransportError) as network_error:
+        client.track("cust_1", "api_call", subscription_id="sub_1", transaction_id=generated)
+    assert network_error.value.transaction_id == generated
+    assert (
+        client.track("cust_1", "api_call", subscription_id="sub_1", transaction_id=generated)
+        == generated
+    )
+
+    sent = [request.json()["event"]["transaction_id"] for request in matcher.request_history]
+    assert sent == [generated] * 3
 
 
 def test_track_preserves_numeric_timestamp_and_rejects_invalid_value(

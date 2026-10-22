@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.13.3 — 2026-10-22
+
+### Fixed
+
+- `track()` errors carry the transaction ID that was sent. When the request fails (an error response, a network error or a timeout), the raised `NozleAPIError` or `NozleTransportError` has `transaction_id` set to the generated (or passed) ID. Before, a generated ID was lost with the error, so a retry sent a new ID and Engine could record the event twice. Retry with `transaction_id=error.transaction_id`. `NozleError.transaction_id` is `None` for every other call. Same on `AsyncNozle`.
+
 ## 0.13.2 — 2026-10-22
 
 ### Fixed

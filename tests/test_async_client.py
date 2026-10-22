@@ -290,6 +290,32 @@ async def test_track_resolves_and_caches_the_subscription() -> None:
     assert event["external_subscription_id"] == "sub_9" and event["transaction_id"] == transaction
 
 
+async def test_track_errors_carry_the_transaction_id_for_a_safe_retry() -> None:
+    sent: List[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["event"]["transaction_id"])
+        if len(sent) == 1:
+            return httpx.Response(502, json={})
+        if len(sent) == 2:
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(200, text="accepted")
+
+    nozle = async_client(handler)
+    with pytest.raises(NozleAPIError) as api_error:
+        await nozle.track("cust", "api_calls", subscription_id="sub_1")
+    generated = api_error.value.transaction_id
+    assert generated
+    with pytest.raises(NozleTransportError) as network_error:
+        await nozle.track("cust", "api_calls", subscription_id="sub_1", transaction_id=generated)
+    assert network_error.value.transaction_id == generated
+    retried = await nozle.track(
+        "cust", "api_calls", subscription_id="sub_1", transaction_id=generated
+    )
+    assert retried == generated
+    assert sent == [generated] * 3
+
+
 async def test_secret_key_comes_from_the_environment_and_host_sets_both_urls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
