@@ -234,6 +234,11 @@ class _BaseNozle(Resource[M]):
         *,
         idempotency_key: Optional[str] = None,
     ) -> Steps[ManagePaymentMethodResult]:
+        """Return a Stripe billing page `url` where the customer adds or replaces a payment method.
+
+        Stripe only. For a Razorpay customer (who pays each invoice by payment link) this
+        raises `NozleAPIError` with HTTP 422 and `has_code("razorpay_pays_by_link")`.
+        """
         operation = "manage_payment_method"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
