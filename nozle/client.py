@@ -47,8 +47,11 @@ from nozle.types import (
     SubscribeResult,
     SubscriptionChangePreview,
     SubscriptionOptions,
+    SubscriptionTransitionCreditAction,
+    SubscriptionTransitionFinalInvoiceAction,
     SubscriptionTransitionParams,
     SubscriptionTransitionPreview,
+    SubscriptionTransitionRefundMode,
     SubscriptionTransitionResult,
     WithdrawPendingSubscriptionChangeResult,
 )
@@ -435,16 +438,28 @@ class _BaseNozle(Resource[M]):
         self,
         customer_id: str,
         subscription_id: str,
-        policy: CancellationPolicy = "end_of_period",
+        policy: Optional[CancellationPolicy] = None,
+        *,
+        credit_action: Optional[SubscriptionTransitionCreditAction] = None,
+        refund_mode: Optional[SubscriptionTransitionRefundMode] = None,
+        final_invoice_action: Optional[SubscriptionTransitionFinalInvoiceAction] = None,
     ) -> Steps[CancelSubscriptionResult]:
+        """Cancel a subscription. Options left as None are not sent, so the subscription, then the
+        organization's cancellation settings decide them (timing included)."""
         operation = "cancel_subscription"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
         require_non_empty(subscription_id, "subscription_id", operation)
-        if policy not in ("end_of_period", "immediate"):
+        if policy is not None and policy not in ("end_of_period", "immediate"):
             raise NozleValidationError(
                 "cancel_subscription policy must be 'end_of_period' or 'immediate'"
             )
+        options = {
+            "cancellation_policy": policy,
+            "credit_action": credit_action,
+            "refund_mode": refund_mode,
+            "final_invoice_action": final_invoice_action,
+        }
 
         try:
             return cast(
@@ -456,7 +471,7 @@ class _BaseNozle(Resource[M]):
                         f"/api/v1/subscriptions/{quote(subscription_id, safe='')}",
                         params={
                             "customer_id": customer_id,
-                            "cancellation_policy": policy,
+                            **{k: v for k, v in options.items() if v is not None},
                         },
                     )
                 ),
