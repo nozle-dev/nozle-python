@@ -93,6 +93,35 @@ never sends both fields and rejects conflicting values.
 Backend subscription creation remains available with `nozle.subscribe(customer_id,
 plan_code)`. Both checkout and subscription creation require an `sk_` key.
 
+### Plan versions
+
+Changing the price of a plan that customers pay for saves it as the plan's next
+version: new customers get the new version, and existing subscribers keep the price
+they bought until you move them. `plans()` returns current versions only; each plan
+has `version` and `is_current`.
+
+```python
+# Keep selling the older price to one customer.
+nozle.subscribe("cust_123", "pro", plan_version=1)
+
+versions = nozle.plan_versions.list("pro")  # every version, its price and active subscriptions
+older = nozle.plan_versions.get("pro", 1)
+
+# Move version 1's subscribers to the current version, each at the end of its billing period.
+preview = nozle.plan_versions.preview_migration("pro", 1)
+migration = nozle.plan_versions.create_migration("pro", 1)
+detail = nozle.plan_versions.get_migration("pro", migration["nozle_id"])  # per-subscription items
+nozle.plan_versions.cancel_migration("pro", migration["nozle_id"])  # unschedules moves not started
+```
+
+A migration invoices, credits and refunds nothing when it runs: each subscription is
+billed the new version from its next period. Subscriptions it cannot move (custom
+pricing, a trial the new version would change, a pending plan change, an open checkout,
+and so on) are skipped with a `skip_reason`. Sending the same plan code again for an
+existing subscription keeps its version; another `plan_version` for it is refused.
+`plan_versions` needs a secret key. See
+[Plan versioning](https://docs.nozle.dev/guides/billing/plan-versions).
+
 Cancellation is also backend-only. Without a `policy`, the organization's cancellation
 timing applies (set in the dashboard; new organizations default to `end_of_period`; existing organizations keep their setting). Pass the timing to
 choose it per call:

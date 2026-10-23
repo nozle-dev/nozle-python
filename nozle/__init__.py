@@ -20,6 +20,7 @@ from nozle.integrations.anthropic import wrap_anthropic
 from nozle.integrations.openai import wrap_openai
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
+from nozle.plan_versions import PlanVersionsNamespace
 from nozle.types import (
     Alert,
     AlertPage,
@@ -73,6 +74,11 @@ from nozle.types import (
     PendingSubscriptionChange,
     PingResult,
     Plan,
+    PlanVersion,
+    PlanVersionMigration,
+    PlanVersionMigrationItem,
+    PlanVersionMigrationPreview,
+    PlanVersionMigrationPreviewItem,
     ProcessingCheckoutResult,
     RazorpayCheckoutResult,
     RazorpayVerification,
@@ -104,6 +110,12 @@ from nozle.usage import UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "PlanVersion",
+    "PlanVersionMigration",
+    "PlanVersionMigrationItem",
+    "PlanVersionMigrationPreview",
+    "PlanVersionMigrationPreviewItem",
+    "PlanVersionsNamespace",
     "Alert",
     "AlertPage",
     "AlertsNamespace",

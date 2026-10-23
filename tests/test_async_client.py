@@ -146,6 +146,14 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.margin.by_plan(),
     lambda n: n.margin.by_model(),
     lambda n: n.margin.trend("week"),
+    lambda n: n.subscribe("cust", "pro", plan_version=1),
+    lambda n: n.plan_versions.list("pro"),
+    lambda n: n.plan_versions.get("pro", 1),
+    lambda n: n.plan_versions.preview_migration("pro", 1),
+    lambda n: n.plan_versions.create_migration("pro", 1, to_version=2),
+    lambda n: n.plan_versions.list_migrations("pro"),
+    lambda n: n.plan_versions.get_migration("pro", "mig_1"),
+    lambda n: n.plan_versions.cancel_migration("pro", "mig_1"),
 ]
 
 

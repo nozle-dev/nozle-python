@@ -2335,13 +2335,8 @@
         },
         "integration_type": {
          "enum": [
-          "netsuite",
-          "anrok",
-          "xero"
+          "anrok"
          ],
-         "type": "string"
-        },
-        "subsidiary_id": {
          "type": "string"
         },
         "sync_with_provider": {
@@ -5426,26 +5421,6 @@
    },
    "subscription_at": {
     "type": "string"
-   },
-   "subscriptions": {
-    "properties": {
-     "external_ids": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array"
-     },
-     "plan_code": {
-      "type": "string"
-     },
-     "terminated_at": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "external_ids"
-    ],
-    "type": "object"
    }
   },
   "required": [
@@ -6321,6 +6296,15 @@
      "pay_in_advance": {
       "type": "boolean"
      },
+     "plan_family_code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "show_on_pricing": {
+      "type": "boolean"
+     },
      "tax_codes": {
       "items": {
        "type": "string"
@@ -7141,6 +7125,35 @@
   ],
   "type": "object"
  },
+ "POST /core/api/v1/plans/{code}/version-migrations": {
+  "properties": {
+   "from_version": {
+    "type": "integer"
+   },
+   "to_version": {
+    "type": "integer"
+   }
+  },
+  "required": [
+   "from_version"
+  ],
+  "type": "object"
+ },
+ "POST /core/api/v1/plans/{code}/version-migrations/preview": {
+  "properties": {
+   "from_version": {
+    "type": "integer"
+   },
+   "to_version": {
+    "type": "integer"
+   }
+  },
+  "required": [
+   "from_version"
+  ],
+  "type": "object"
+ },
+ "POST /core/api/v1/plans/{code}/version-migrations/{id}/cancel": null,
  "POST /core/api/v1/subscriptions": {
   "properties": {
    "authorization": {
@@ -7831,6 +7844,9 @@
        }
       },
       "type": "object"
+     },
+     "plan_version": {
+      "type": "integer"
      },
      "subscription_at": {
       "type": "string"
@@ -9181,6 +9197,14 @@
   ],
   "type": "object"
  },
+ "POST /engine/api/v1/customers/{customer_id}/payment-method/manage": {
+  "properties": {
+   "return_url": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
  "POST /engine/api/v1/events": {
   "properties": {
    "event": {
@@ -9311,6 +9335,7 @@
   "type": "object"
  },
  "POST /engine/api/v1/margin/simulate": {
+  "additionalProperties": false,
   "properties": {
    "metric_code": {
     "type": "string"
@@ -9320,7 +9345,8 @@
    }
   },
   "required": [
-   "metric_code"
+   "metric_code",
+   "new_price_dollars"
   ],
   "type": "object"
  },
@@ -9339,6 +9365,9 @@
    },
    "plan_code": {
     "type": "string"
+   },
+   "plan_version": {
+    "type": "integer"
    }
   },
   "required": [
@@ -9589,6 +9618,9 @@
    "properties": {
     "additionalProperties": true,
     "type": "object"
+   },
+   "subscription_id": {
+    "type": "string"
    }
   },
   "required": [
@@ -9616,6 +9648,9 @@
    "properties": {
     "additionalProperties": true,
     "type": "object"
+   },
+   "subscription_id": {
+    "type": "string"
    },
    "timestamp": {
     "allOf": [
@@ -11351,6 +11386,18 @@
       },
       "type": "object"
      },
+     "checkout_default_return_url": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "checkout_return_origins": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
      "city": {
       "type": [
        "string",
@@ -12564,6 +12611,9 @@
        "null"
       ]
      },
+     "disable_version": {
+      "type": "boolean"
+     },
      "fixed_charges": {
       "items": {
        "properties": {
@@ -12676,6 +12726,9 @@
       },
       "type": "array"
      },
+     "force_version": {
+      "type": "boolean"
+     },
      "interval": {
       "enum": [
        "weekly",
@@ -12728,6 +12781,15 @@
       "type": "string"
      },
      "pay_in_advance": {
+      "type": "boolean"
+     },
+     "plan_family_code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "show_on_pricing": {
       "type": "boolean"
      },
      "tax_codes": {

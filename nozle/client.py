@@ -29,6 +29,7 @@ from nozle.errors import NozleAPIError, NozleValidationError
 from nozle.events import EventsNamespace
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
+from nozle.plan_versions import PlanVersionsNamespace
 from nozle.track import track_steps
 from nozle.types import (
     CancellationPolicy,
@@ -106,6 +107,7 @@ class _BaseNozle(Resource[M]):
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
         self.alerts = AlertsNamespace(self._events, self.api_key)
+        self.plan_versions = PlanVersionsNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
     @endpoint
@@ -413,11 +415,28 @@ class _BaseNozle(Resource[M]):
         )
 
     @endpoint
-    def subscribe(self, customer_id: str, plan_code: str) -> Steps[SubscribeResult]:
+    def subscribe(
+        self, customer_id: str, plan_code: str, *, plan_version: Optional[int] = None
+    ) -> Steps[SubscribeResult]:
+        """Subscribe the customer to the current version of the plan, or to ``plan_version``
+        (for example to keep selling an older price). The same customer and code again keep the
+        subscription's own version; another version of an existing subscription raises a 422
+        ``plan_version_change_not_supported``."""
         operation = "subscribe"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
         require_non_empty(plan_code, "plan_code", operation)
+        body: Dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
+        if plan_version is not None:
+            if (
+                isinstance(plan_version, bool)
+                or not isinstance(plan_version, int)
+                or plan_version < 1
+            ):
+                raise NozleValidationError(
+                    f"{operation} requires plan_version to be an integer of 1 or more"
+                )
+            body["plan_version"] = plan_version
         try:
             return cast(
                 SubscribeResult,
@@ -426,7 +445,7 @@ class _BaseNozle(Resource[M]):
                         operation,
                         "POST",
                         "/api/v1/subscribe",
-                        json_body={"plan_code": plan_code, "customer_id": customer_id},
+                        json_body=body,
                     )
                 ),
             )
