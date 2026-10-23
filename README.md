@@ -94,7 +94,7 @@ Backend subscription creation remains available with `nozle.subscribe(customer_i
 plan_code)`. Both checkout and subscription creation require an `sk_` key.
 
 Cancellation is also backend-only. Without a `policy`, the organization's cancellation
-timing applies (set in the dashboard; Nozle's default is immediate). Pass the timing to
+timing applies (set in the dashboard; new organizations default to `end_of_period`; existing organizations keep their setting). Pass the timing to
 choose it per call:
 
 ```python

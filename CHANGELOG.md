@@ -6,7 +6,7 @@
 
 ### Changed
 
-- `cancel_subscription(customer_id, subscription_id)` without `policy` no longer sends `end_of_period`. It sends no timing, so the organization's cancellation timing applies (Nozle's default is `immediate`). Pass `policy="end_of_period"` to keep the previous behaviour. Same on `AsyncNozle`.
+- `cancel_subscription(customer_id, subscription_id)` without `policy` no longer sends `end_of_period`. It sends no timing, so the organization's cancellation timing applies (new organizations default to `end_of_period`; existing organizations keep their setting). Pass `policy="end_of_period"` to keep the previous behaviour. Same on `AsyncNozle`.
 
 ### Added
 
