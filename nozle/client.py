@@ -148,7 +148,8 @@ class _BaseNozle(Resource[M]):
         """Whether the customer may use the feature now.
 
         A customer with several subscriptions needs ``subscription_id`` or ``entity_id``
-        (external ids); without one the result is ``allowed: False, reason: "subscription_required"``.
+        (external ids); without one the result is ``allowed: False``,
+        ``reason: "subscription_required"``.
         """
         return (
             yield from can_steps(
