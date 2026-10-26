@@ -141,8 +141,26 @@ class _BaseNozle(Resource[M]):
         customer_id: str,
         feature: str,
         metadata: Optional[Mapping[str, str]] = None,
+        *,
+        subscription_id: Optional[str] = None,
+        entity_id: Optional[str] = None,
     ) -> Steps[CanResult]:
-        return (yield from can_steps(self._engine, self.api_key, customer_id, feature, metadata))
+        """Whether the customer may use the feature now.
+
+        A customer with several subscriptions needs ``subscription_id`` or ``entity_id`` (external ids);
+        without one the result is ``allowed: False, reason: "subscription_required"``.
+        """
+        return (
+            yield from can_steps(
+                self._engine,
+                self.api_key,
+                customer_id,
+                feature,
+                metadata,
+                subscription_id=subscription_id,
+                entity_id=entity_id,
+            )
+        )
 
     @endpoint
     def plans(self) -> Steps[list[Plan]]:
@@ -845,17 +863,23 @@ class _BaseNozle(Resource[M]):
         if len(subscriptions) == 0:
             raise NozleAPIError(
                 operation,
-                200,
-                f"no active subscription for customer {customer_id!r}",
+                422,
+                {
+                    "code": "active_subscription_not_found",
+                    "error": f"no active subscription for customer {customer_id!r}",
+                },
             )
         if len(subscriptions) > 1:
             raise NozleAPIError(
                 operation,
-                200,
-                (
-                    f"customer {customer_id!r} has {len(subscriptions)} active subscriptions; "
-                    "specify subscription_id"
-                ),
+                422,
+                {
+                    "code": "active_subscription_ambiguous",
+                    "error": (
+                        f"customer {customer_id!r} has {len(subscriptions)} active subscriptions; "
+                        "specify subscription_id"
+                    ),
+                },
             )
         subscription = subscriptions[0]
         if not isinstance(subscription, Mapping) or not isinstance(
