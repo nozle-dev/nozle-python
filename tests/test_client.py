@@ -287,6 +287,48 @@ def test_can_sends_metadata_as_json_query(requests_mock: requests_mock.Mocker) -
     }
 
 
+def test_can_sends_subscription_and_entity_selectors(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.get("https://api.example/engine/api/v1/can", json={"allowed": True, "used": 1})
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    client.can("cust_1", "seats", subscription_id="sub_a", entity_id="ent_1")
+    assert requests_mock.last_request.qs == {
+        "customer_id": ["cust_1"],
+        "feature": ["seats"],
+        "subscription_id": ["sub_a"],
+        "entity_id": ["ent_1"],
+    }
+
+    client.can("cust_1", "seats")
+    assert set(requests_mock.last_request.qs) == {"customer_id", "feature"}
+
+
+@pytest.mark.parametrize(
+    ("subscriptions", "code"),
+    [
+        ([], "active_subscription_not_found"),
+        ([{"external_id": "a"}, {"external_id": "b"}], "active_subscription_ambiguous"),
+    ],
+)
+def test_track_subscription_lookup_failure_has_the_engine_code(
+    requests_mock: requests_mock.Mocker,
+    subscriptions: list[dict[str, str]],
+    code: str,
+) -> None:
+    requests_mock.get(
+        "https://api.nozle.app/core/api/v1/subscriptions",
+        json={"subscriptions": subscriptions},
+    )
+
+    with pytest.raises(NozleAPIError) as caught:
+        Nozle("sk_test").track("cust_1", "event")
+    assert caught.value.status_code == 422
+    assert caught.value.code == code
+    assert caught.value.has_code(code)
+
+
 @pytest.mark.parametrize(
     "limit,remaining",
     [(None, None), (100, 97)],

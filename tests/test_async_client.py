@@ -35,7 +35,7 @@ UNIVERSAL: Dict[str, Any] = {
     "usage_periods": [{"amount_cents": 2}],
     "credit_systems": [],
     "meta": {},
-    "invoice": {"lago_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
+    "invoice": {"nozle_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
     "alert": {"code": "a1"},
     "manage_payment_method": {
         "url": "https://billing.stripe.com/x",
@@ -154,6 +154,7 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.plan_versions.list_migrations("pro"),
     lambda n: n.plan_versions.get_migration("pro", "mig_1"),
     lambda n: n.plan_versions.cancel_migration("pro", "mig_1"),
+    lambda n: n.can("cust", "export", subscription_id="sub_1", entity_id="ent_1"),
 ]
 
 

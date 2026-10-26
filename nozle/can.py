@@ -15,8 +15,21 @@ def can(
     customer_id: str,
     feature: str,
     metadata: Optional[Mapping[str, Any]] = None,
+    *,
+    subscription_id: Optional[str] = None,
+    entity_id: Optional[str] = None,
 ) -> CanResult:
-    return run_sync(can_steps(transport, api_key, customer_id, feature, metadata))
+    return run_sync(
+        can_steps(
+            transport,
+            api_key,
+            customer_id,
+            feature,
+            metadata,
+            subscription_id=subscription_id,
+            entity_id=entity_id,
+        )
+    )
 
 
 def can_steps(
@@ -25,12 +38,19 @@ def can_steps(
     customer_id: str,
     feature: str,
     metadata: Optional[Mapping[str, Any]] = None,
+    *,
+    subscription_id: Optional[str] = None,
+    entity_id: Optional[str] = None,
 ) -> Steps[CanResult]:
     operation = "can"
     require_secret_key(api_key, operation)
     require_non_empty(customer_id, "customer_id", operation)
     require_non_empty(feature, "feature", operation)
     params = {"customer_id": customer_id, "feature": feature}
+    if subscription_id:
+        params["subscription_id"] = subscription_id
+    if entity_id:
+        params["entity_id"] = entity_id
     if metadata:
         params["metadata"] = json.dumps(metadata)
     return cast(CanResult, (yield transport.call(operation, "GET", "/api/v1/can", params=params)))

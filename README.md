@@ -311,6 +311,9 @@ nozle.cost_events.track(
 )
 
 entitlement = nozle.can("customer-123", "code_completion")
+# A customer with several subscriptions: pick one by external id (or by Entity). Without a selector the
+# result is {"allowed": False, "reason": "subscription_required"}.
+seats = nozle.can("customer-123", "seats", subscription_id="sub_a")  # or entity_id="ent_1"
 deduction = nozle.check_and_deduct("customer-123", credits=5)  # legacy wallet adapter; `feature` is deprecated and ignored
 health = nozle.ping()
 

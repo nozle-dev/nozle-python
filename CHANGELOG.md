@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.17.0 — 2026-10-26
+
+### Added
+
+- `can(customer_id, feature, metadata=None, *, subscription_id=None, entity_id=None)` evaluates one subscription (or one Entity's subscription) of a customer with several. Without a selector, a customer with several current subscriptions gets `allowed: False, reason: "subscription_required"`. Same on `AsyncNozle`.
+
+### Changed
+
+- `track()` with no `subscription_id` for a customer with no or several active subscriptions now raises `NozleAPIError` with `status_code` 422 (it was 200) and `code` `active_subscription_not_found` or `active_subscription_ambiguous`, the Engine's codes.
+
 ## 0.16.0 — 2026-10-24
 
 ### Added
