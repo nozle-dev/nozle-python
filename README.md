@@ -437,6 +437,18 @@ the successful provider response or completed stream is preserved and a
 `NozleAuthenticationError`; transport failures use `NozleTransportError`. Exception
 messages redact API keys and secret-shaped response fields.
 
+### Workspace suspended (402)
+
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. `NozleAPIError` has `status_code` 402 and `code` `workspace_suspended` from `can()`, `track()`, `usage.check()` and every other call (sync and async); `can()` raises instead of returning `allowed: False`. Do not retry blindly: the SDK never retries a 402. Pay the Nozle invoices in the dashboard and calls work again at once. Events sent during the suspension are refused, not queued.
+
+```python
+try:
+    nozle.can("cust_123", "code_completion")
+except NozleAPIError as error:
+    if error.code == "workspace_suspended":
+        ...  # tell your team to pay the Nozle invoices; not allowed, not denied
+```
+
 ### Payment providers: Stripe and Razorpay
 
 `checkout()` and `checkout_invoice()` use the payment provider connected to your
