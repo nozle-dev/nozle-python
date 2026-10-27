@@ -73,3 +73,14 @@ async def test_async_402_raises_with_code_and_is_not_retried(
         await call(nozle)
     _assert_402(raised.value, code)
     assert len(seen) == 1
+
+
+def test_package_has_no_embedded_checkout_secret() -> None:
+    """Stripe checkout is hosted only: no client_secret in the SDK source or README."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    files = [*(root / "nozle").rglob("*.py"), root / "README.md"]
+    for file in files:
+        text = file.read_text()
+        assert "client_secret" not in text and "clientSecret" not in text, file

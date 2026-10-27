@@ -89,6 +89,7 @@ def test_collection_endpoints_require_server_credentials(operation: str) -> None
         },
         {
             "type": "hosted",
+            "url": "https://rzp.io/i/abc",
             "payment_url": "https://rzp.io/i/abc",
             "checkout_id": "c2",
             "amount_cents": 500,
@@ -98,9 +99,9 @@ def test_collection_endpoints_require_server_credentials(operation: str) -> None
         },
         {"type": "processing", "checkout_id": "c3", "status": "processing", "currency": "INR"},
         {
-            "type": "stripe",
-            "client_secret": "cs_test_1",
-            "clientSecret": "cs_test_1",
+            "type": "hosted",
+            "url": "https://checkout.stripe.com/c/pay/cs_test_1",
+            "payment_url": "https://checkout.stripe.com/c/pay/cs_test_1",
             "plan_upgrade_intent_id": "intent-2",
             "amount_cents": 1000,
             "currency": "USD",

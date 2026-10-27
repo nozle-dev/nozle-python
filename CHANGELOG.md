@@ -6,7 +6,13 @@
 
 ### Added
 
-- A suspended workspace (unpaid Nozle invoices) answers every call with HTTP 402 and `code` `workspace_suspended`. It raises `NozleAPIError` (`status_code` 402, `code`) from `can()`, `track()`, `usage.check()` and every other call, sync and async, and is never retried or turned into an allowed or denied result. Tests and a README note added; no API change.
+- A suspended workspace (unpaid Nozle invoices) answers every call with HTTP 402 and `code` `workspace_suspended`. It raises `NozleAPIError` (`status_code` 402, `code`) from `can()`, `track()`, `usage.check()` and every other call, sync and async, and is never retried or turned into an allowed or denied result. Tests and a README note added.
+- `checkout()` and `checkout_invoice()` accept `cancel_url=` (sent as `cancel_url`): where Stripe sends a customer who leaves the hosted page, validated like `return_url`. A return URL may contain `{CHECKOUT_SESSION_ID}`.
+
+### Changed
+
+- **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkout_invoice()`, plan change or Entity checkout returns `{"type": "hosted", "url", "payment_url", "checkout_id", ...}`: redirect the customer to `url`, then poll `checkout_status(checkout_id)`. The `type: "stripe"` result, `StripeCheckoutResult` and every `client_secret` / `clientSecret` are removed, including on `entity_subscriptions.checkout_many()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
+- The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
 
 ## 0.17.0 — 2026-10-26
 

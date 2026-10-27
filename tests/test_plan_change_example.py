@@ -71,9 +71,9 @@ class PlanSDK:
         if self.conflict:
             raise NozleAPIError("checkout", 409, {"private": "do not echo"})
         return {
-            "type": "stripe",
-            "client_secret": "customer-payment-secret",
-            "publishable_key": "pk_public",
+            "type": "hosted",
+            "url": "https://checkout.stripe.com/c/pay/intent",
+            "payment_url": "https://checkout.stripe.com/c/pay/intent",
             "checkout_id": "intent",
         }
 
@@ -97,7 +97,7 @@ class PlanSDK:
         self.calls.append(("status", *args, kwargs))
         return {
             "status": "awaiting_payment",
-            "checkout": {"type": "stripe", "client_secret": "customer-payment-secret"},
+            "checkout": {"type": "hosted", "url": "https://checkout.stripe.com/c/pay/intent"},
         }
 
     def verify_checkout(self, *args: Any, **kwargs: Any) -> Any:
@@ -226,7 +226,7 @@ def test_checkout_recovery_and_verification_are_customer_and_subscription_scoped
     server = merchant(tmp_path, sdk)
     state = server.dispatch("authenticated", route("status"), {"subscriptionId": "external"})
     assert state["checkoutStatus"] == "awaiting_payment"
-    assert state["checkout"]["type"] == "stripe"
+    assert state["checkout"]["type"] == "hosted"
     verification = {
         "razorpay_order_id": "order",
         "razorpay_payment_id": "payment",
@@ -255,24 +255,14 @@ def test_atomic_conflict_is_safe_409(tmp_path: Path) -> None:
     assert "private" not in str(error.value)
 
 
-def test_embedded_stripe_requires_only_public_configuration(tmp_path: Path) -> None:
-    sdk = PlanSDK()
-    sdk.checkout = lambda *args, **kwargs: {"type": "stripe", "client_secret": "customer-secret"}  # type: ignore[method-assign]
+def test_stripe_checkout_is_passed_through_hosted_without_a_client_secret(tmp_path: Path) -> None:
     server = BillingService(
-        sdk,
+        PlanSDK(),
         ActionStore(tmp_path / "actions.json"),
         lambda _: {},
         return_origin="https://merchant.example",
-        stripe_publishable_key="pk_test_public",
     )
-    assert (
-        server.dispatch("authenticated", route("apply"), APPLY)["publishable_key"]
-        == "pk_test_public"
-    )
-    with pytest.raises(ValueError, match="publishable key"):
-        BillingService(
-            sdk,
-            ActionStore(tmp_path / "bad.json"),
-            lambda _: {},
-            stripe_publishable_key="sk_secret",
-        )
+    result = server.dispatch("authenticated", route("apply"), APPLY)
+    assert result["type"] == "hosted"
+    assert result["url"] == "https://checkout.stripe.com/c/pay/intent"
+    assert "client_secret" not in str(result) and "publishable_key" not in str(result)

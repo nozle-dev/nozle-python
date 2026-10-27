@@ -15,7 +15,7 @@ from datetime import datetime
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 from urllib.parse import quote, unquote, urlsplit
 
 import requests
@@ -99,12 +99,11 @@ class BillingService:
         store: ActionStore,
         create_portal_session: Callable[[str], dict[str, Any]],
         return_origin: str = "http://localhost:4243",
-        stripe_publishable_key: Optional[str] = None,
     ) -> None:
         self.sdk = sdk
         self.store = store
         self.create_portal_session = create_portal_session
-        self.plans = PlanService(sdk, store, return_origin, stripe_publishable_key)
+        self.plans = PlanService(sdk, store, return_origin)
 
     def dispatch(self, customer_id: str, path: str, body: Any) -> dict[str, Any]:
         if path.startswith("/api/billing/plans/"):
@@ -295,7 +294,6 @@ if __name__ == "__main__":
             os.environ.get("NOZLE_PORTAL_API_URL") or core_url,
         ),
         return_origin=os.environ.get("MERCHANT_ORIGIN", "http://localhost:4243"),
-        stripe_publishable_key=os.environ.get("STRIPE_PUBLISHABLE_KEY"),
     )
     handler = merchant_handler(
         origin=os.environ.get("MERCHANT_ORIGIN", "http://localhost:4243"),

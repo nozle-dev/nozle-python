@@ -8886,6 +8886,9 @@
  },
  "POST /engine/api/v1/checkout": {
   "properties": {
+   "cancel_url": {
+    "type": "string"
+   },
    "customer_id": {
     "type": "string"
    },

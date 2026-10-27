@@ -189,6 +189,7 @@ class _BaseNozle(Resource[M]):
         external_entity_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
         quote_id: Optional[str] = None,
+        cancel_url: Optional[str] = None,
     ) -> Steps[CheckoutResult]:
         operation = "checkout"
         require_secret_key(self.api_key, operation)
@@ -212,6 +213,8 @@ class _BaseNozle(Resource[M]):
             body["quote_id"] = quote_id
         if resolved_return_url:
             body["return_url"] = resolved_return_url
+        if cancel_url:
+            body["cancel_url"] = cancel_url
         try:
             return cast(
                 CheckoutResult,
@@ -235,6 +238,7 @@ class _BaseNozle(Resource[M]):
         *,
         idempotency_key: Optional[str] = None,
         register_mandate: Optional[bool] = None,
+        cancel_url: Optional[str] = None,
     ) -> Steps[CheckoutResult]:
         require_secret_key(self.api_key, "checkout_invoice")
         require_non_empty(invoice_id, "invoice_id", "checkout_invoice")
@@ -243,7 +247,10 @@ class _BaseNozle(Resource[M]):
             (
                 yield from self._checkout_request(
                     "checkout_invoice",
-                    {"invoice_id": invoice_id},
+                    {
+                        "invoice_id": invoice_id,
+                        **({"cancel_url": cancel_url} if cancel_url else {}),
+                    },
                     idempotency_key=idempotency_key,
                     register_mandate=register_mandate,
                 )
