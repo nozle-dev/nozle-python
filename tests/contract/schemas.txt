@@ -19,3 +19,12 @@ PlanVersionMigration
 PlanVersionMigrationItem
 PlanVersionMigrationPreview
 PlanVersionMigrationPreviewItem
+MarginForecastResponse
+MarginForecastPoint
+MarginSimulationResult
+CostIntelligenceReport
+SharedCostAllocationPreview
+SharedCostAllocationRun
+SharedCostCustomerAllocation
+CreditsBalanceImport
+BillingStateImport

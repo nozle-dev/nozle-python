@@ -194,6 +194,41 @@ If you create customers through the Nozle REST API instead of this SDK, a custom
 `sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider
 assignment is dropped.
 
+### Importing billing state and opening credit balances
+
+When you move customers from another billing system, import each subscription that system
+still bills (Core), then its current credit balance (Engine). Both need a secret key and an
+`idempotency_key` (at most 255 bytes): retry an uncertain call with the same key and body.
+`"dry_run": True` validates without writing. Failures raise `NozleAPIError`.
+
+```python
+imported = nozle.customers.import_billing_state(
+    "workspace_123",
+    {
+        "subscription": {
+            "plan_code": "pro_monthly",
+            "status": "active",
+            "billing_authority": "external",
+            "external_reference": "merchant_subscription_123",
+            "current_period_start": "2026-10-15T00:00:00Z",
+            "current_period_end": "2026-11-15T00:00:00Z",
+        }
+    },
+    idempotency_key="import-workspace_123-state",
+)
+
+nozle.customers.import_credit_balance(
+    "workspace_123",
+    {
+        "external_subscription_id": imported["subscription"]["external_subscription_id"],
+        "credit_system_code": "ai_credits",
+        "granted_amount": "500",
+        "remaining_amount": "320",
+    },
+    idempotency_key="import-workspace_123-credits",
+)
+```
+
 ### Customer and Entity credits
 
 ```python
@@ -319,6 +354,12 @@ health = nozle.ping()
 summary = nozle.margin.summary()
 by_customer = nozle.margin.by_customer()
 trend = nozle.margin.trend(granularity="week")
+forecast = nozle.margin.forecast()  # next 30 days from the last month's daily trend
+simulation = nozle.margin.simulate("agent_execution", 1.0, from_date="2026-10-01")
+
+report = nozle.cost_intelligence.report(from_date="2026-10-01T00:00:00Z", limit=50)
+preview = nozle.cost_intelligence.preview_shared_cost_allocation(pool_id, "2026-10-01T00:00:00Z")
+run = nozle.cost_intelligence.allocate_shared_cost(pool_id, "2026-10-01T00:00:00Z")
 ```
 
 If `track()` is called without `subscription_id`, the SDK resolves and caches the

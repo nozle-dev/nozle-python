@@ -121,6 +121,33 @@ CALLS: list[Callable[[Nozle], Any]] = [
     lambda n: n.credits.allocate(
         "cust", "user-42", credit_system_code="ai_credits", amount="10", idempotency_key="a1"
     ),
+    lambda n: n.margin.simulate("agent_execution", 1),
+    lambda n: n.customers.import_credit_balance(
+        "cust",
+        {
+            "external_subscription_id": "sub_1",
+            "credit_system_code": "ai_credits",
+            "granted_amount": "500",
+            "remaining_amount": "320",
+            "dry_run": True,
+        },
+        idempotency_key="i1",
+    ),
+    lambda n: n.customers.import_billing_state(
+        "cust",
+        {
+            "dry_run": True,
+            "subscription": {
+                "plan_code": "pro",
+                "status": "active",
+                "billing_authority": "external",
+                "external_reference": "ext_1",
+                "current_period_start": "2026-10-15T00:00:00Z",
+                "current_period_end": "2026-11-15T00:00:00Z",
+            },
+        },
+        idempotency_key="i2",
+    ),
 ]
 
 

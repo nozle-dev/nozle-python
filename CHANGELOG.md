@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.18.0 — 2026-10-27
+## 0.19.0 — 2026-10-27
 
 ### Added
 
@@ -13,6 +13,14 @@
 
 - **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkout_invoice()`, plan change or Entity checkout returns `{"type": "hosted", "url", "payment_url", "checkout_id", ...}`: redirect the customer to `url`. Only a paid upgrade has a status call (`checkout_status(plan_upgrade_intent_id, ...)`); a Stripe `checkout_id` is the session id, not a status id, so confirm a new subscription or invoice through webhooks or by reloading billing state. The `type: "stripe"` result, `StripeCheckoutResult` and every `client_secret` / `clientSecret` are removed, including on `entity_subscriptions.checkout_many()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
 - The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
+
+## 0.18.0 — 2026-10-27
+
+### Added
+
+- `customers.import_billing_state(customer_id, body, *, idempotency_key)` imports a subscription another system already bills (Core `POST /customers/{customer_id}/billing-state-imports`; the SDK wraps `body` in `billing_state_import`), and `customers.import_credit_balance(customer_id, body, *, idempotency_key)` records its opening credit balance (Engine `POST /customers/{customer_id}/credit-balance-imports`). Both need a secret key and an idempotency key of at most 255 bytes, return the unwrapped import and raise `NozleAPIError` on failure. Same on `AsyncNozle`.
+- `margin.forecast(**params)` (`GET /margin/forecast`) and `margin.simulate(metric_code, new_price_dollars, **params)` (`POST /margin/simulate`), with typed results.
+- `cost_intelligence.report(from_date=None, to_date=None, limit=None)`, `cost_intelligence.preview_shared_cost_allocation(pool_id, allocation_period_start)` and `cost_intelligence.allocate_shared_cost(pool_id, allocation_period_start)` (Engine `/cost-intelligence/*`, secret keys).
 
 ## 0.17.0 — 2026-10-26
 

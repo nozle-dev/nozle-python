@@ -20,6 +20,7 @@ from nozle._validation import (
 from nozle.alerts import AlertsNamespace
 from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
+from nozle.cost_intelligence import CostIntelligenceNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
 from nozle.customers import CustomersNamespace
@@ -98,7 +99,8 @@ class _BaseNozle(Resource[M]):
         )
         self.events = EventsNamespace()
         self.cost_events = CostEventsNamespace(self._engine, self.api_key)
-        self.customers = CustomersNamespace(self._events, self.api_key)
+        self.customers = CustomersNamespace(self._events, self.api_key, self._engine)
+        self.cost_intelligence = CostIntelligenceNamespace(self._engine, self.api_key)
         self.credit_systems = CreditSystemsNamespace(self._events, self.api_key)
         self.credits = CreditsNamespace(self._engine, self.api_key)
         self.entities = EntitiesNamespace(self._engine, self.api_key)
