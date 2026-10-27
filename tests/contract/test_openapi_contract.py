@@ -36,6 +36,15 @@ CONTRACT = {
     "PlanVersionMigrationItem": "PlanVersionMigrationItem",
     "PlanVersionMigrationPreview": "PlanVersionMigrationPreview",
     "PlanVersionMigrationPreviewItem": "PlanVersionMigrationPreviewItem",
+    "MarginForecast": "MarginForecastResponse",
+    "MarginForecastPoint": "MarginForecastPoint",
+    "MarginSimulation": "MarginSimulationResult",
+    "CostIntelligenceReport": "CostIntelligenceReport",
+    "SharedCostAllocationPreview": "SharedCostAllocationPreview",
+    "SharedCostAllocationRun": "SharedCostAllocationRun",
+    "SharedCostCustomerAllocation": "SharedCostCustomerAllocation",
+    "CreditBalanceImport": "CreditsBalanceImport",
+    "BillingStateImport": "BillingStateImport",
 }
 
 

@@ -899,3 +899,142 @@ class PlanVersionMigrationPreview(TypedDict):
     from_version: int
     to_version: int
     items: List[PlanVersionMigrationPreviewItem]
+
+
+class MarginForecastPoint(TypedDict):
+    date: str
+    projected_revenue: int
+    projected_cost: int
+    projected_margin: int
+
+
+class MarginForecast(TypedDict):
+    """``GET /margin/forecast``: daily projection for the 30 days after the range (cents)."""
+
+    points: List[MarginForecastPoint]
+    confidence: Literal["low", "medium", "high"]
+
+
+class MarginSimulation(TypedDict):
+    """``POST /margin/simulate``: one metric's usage replayed at a new unit price (cents)."""
+
+    metric_code: str
+    current_revenue_cents: int
+    current_cost_cents: int
+    current_margin_cents: int
+    new_revenue_cents: int
+    new_cost_cents: int
+    new_margin_cents: int
+    revenue_delta_cents: int
+    margin_delta_cents: int
+    event_count: int
+
+
+# ``GET /cost-intelligence/report``: ledger-backed cost totals, breakdowns and review queues.
+# Functional syntax because ``from`` is a Python keyword.
+CostIntelligenceReport = TypedDict(
+    "CostIntelligenceReport",
+    {
+        "from": str,
+        "to": str,
+        "summary": JSONMapping,
+        "features": List[JSONMapping],
+        "customers": List[JSONMapping],
+        "cost_events": List[JSONMapping],
+        "shared_costs": List[JSONMapping],
+        "uncosted": List[JSONMapping],
+        "conflicts": List[JSONMapping],
+    },
+)
+
+
+class SharedCostCustomerAllocation(TypedDict):
+    external_customer_id: str
+    amount: str
+
+
+class SharedCostAllocationPreview(TypedDict):
+    allocation_period_start: str
+    allocation_period_end: str
+    eligibility_period_start: str
+    eligibility_period_end: str
+    recognized_amount: str
+    currency: str
+    consumer_count: int
+    allocations: List[SharedCostCustomerAllocation]
+
+
+class SharedCostAllocationRun(TypedDict):
+    id: str
+    status: Literal["completed", "unallocated"]
+    allocation_period_start: str
+    allocation_period_end: str
+    recognized_amount: str
+    currency: str
+    consumer_count: int
+
+
+class _CreditBalanceImportRequestRequired(TypedDict):
+    external_subscription_id: str
+    credit_system_code: str
+    granted_amount: str
+    remaining_amount: str
+
+
+class CreditBalanceImportRequest(_CreditBalanceImportRequestRequired, total=False):
+    """Body of ``customers.import_credit_balance``; amounts are decimal strings."""
+
+    external_entity_id: str
+    dry_run: bool
+
+
+class _CreditBalanceImportRequired(TypedDict):
+    external_customer_id: str
+    external_subscription_id: str
+    credit_system_code: str
+    granted_amount: str
+    remaining_amount: str
+    current_period_start: str
+    invoice_created: bool
+    dry_run: bool
+    replayed: bool
+
+
+class CreditBalanceImport(_CreditBalanceImportRequired, total=False):
+    operation_id: str
+    balance_source_id: str
+    external_entity_id: str
+    expires_at: str
+
+
+class BillingStateImportSubscription(TypedDict):
+    plan_code: str
+    status: Literal["active"]
+    billing_authority: Literal["external"]
+    external_reference: str
+    current_period_start: str
+    current_period_end: str
+
+
+class _BillingStateImportRequestRequired(TypedDict):
+    subscription: BillingStateImportSubscription
+
+
+class BillingStateImportRequest(_BillingStateImportRequestRequired, total=False):
+    """Body of ``customers.import_billing_state`` (the SDK wraps it in ``billing_state_import``)."""
+
+    external_entity_id: str
+    dry_run: bool
+
+
+class _BillingStateImportRequired(TypedDict):
+    status: Literal["completed", "validated"]
+    dry_run: bool
+    external_customer_id: str
+    subscription: JSONMapping
+    replayed: bool
+
+
+class BillingStateImport(_BillingStateImportRequired, total=False):
+    id: str
+    external_entity_id: str
