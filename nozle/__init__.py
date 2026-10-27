@@ -2,6 +2,7 @@ from nozle._version import __version__
 from nozle.alerts import AlertsNamespace
 from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
+from nozle.cost_intelligence import CostIntelligenceNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
 from nozle.customers import CustomersNamespace
@@ -24,6 +25,9 @@ from nozle.plan_versions import PlanVersionsNamespace
 from nozle.types import (
     Alert,
     AlertPage,
+    BillingStateImport,
+    BillingStateImportRequest,
+    BillingStateImportSubscription,
     CancellationPolicy,
     CancelSubscriptionResult,
     CanResult,
@@ -32,7 +36,10 @@ from nozle.types import (
     CheckoutStatus,
     CompletedCheckoutResult,
     CostEventAccepted,
+    CostIntelligenceReport,
     CreditBalance,
+    CreditBalanceImport,
+    CreditBalanceImportRequest,
     CreditBalances,
     CreditBalanceSource,
     CreditOperation,
@@ -71,6 +78,9 @@ from nozle.types import (
     JSONMapping,
     ManagedSubscription,
     ManagePaymentMethodResult,
+    MarginForecast,
+    MarginForecastPoint,
+    MarginSimulation,
     PendingSubscriptionChange,
     PingResult,
     Plan,
@@ -83,6 +93,9 @@ from nozle.types import (
     RazorpayCheckoutResult,
     RazorpayVerification,
     ScheduledCheckoutResult,
+    SharedCostAllocationPreview,
+    SharedCostAllocationRun,
+    SharedCostCustomerAllocation,
     StripeCheckoutResult,
     SubscribeResult,
     SubscriptionCancellation,
@@ -110,6 +123,19 @@ from nozle.usage import UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
+    "CostIntelligenceNamespace",
+    "BillingStateImport",
+    "BillingStateImportRequest",
+    "BillingStateImportSubscription",
+    "CostIntelligenceReport",
+    "CreditBalanceImport",
+    "CreditBalanceImportRequest",
+    "MarginForecast",
+    "MarginForecastPoint",
+    "MarginSimulation",
+    "SharedCostAllocationPreview",
+    "SharedCostAllocationRun",
+    "SharedCostCustomerAllocation",
     "PlanVersion",
     "PlanVersionMigration",
     "PlanVersionMigrationItem",

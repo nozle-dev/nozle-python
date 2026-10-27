@@ -45,6 +45,8 @@ UNIVERSAL: Dict[str, Any] = {
     "entity": {"name": "User", "metadata": {"seat": 1}},
     "entity_subscription": {"external_entity_id": "user-42"},
     "entity_subscription_checkout": {"items": []},
+    "credit_balance_import": {"replayed": False},
+    "billing_state_import": {"replayed": True},
 }
 HEADERS = ("authorization", "content-type", "idempotency-key")
 Sent = Tuple[str, str, List[Tuple[str, str]], Any, Dict[str, str]]
@@ -155,6 +157,35 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.plan_versions.get_migration("pro", "mig_1"),
     lambda n: n.plan_versions.cancel_migration("pro", "mig_1"),
     lambda n: n.can("cust", "export", subscription_id="sub_1", entity_id="ent_1"),
+    lambda n: n.margin.forecast(from_date="2026-10-01"),
+    lambda n: n.margin.simulate("agent_execution", 1.5, from_date="2026-10-01"),
+    lambda n: n.cost_intelligence.report(from_date="2026-10-01", limit=10),
+    lambda n: n.cost_intelligence.preview_shared_cost_allocation("pool_1", STAMP),
+    lambda n: n.cost_intelligence.allocate_shared_cost("pool_1", STAMP),
+    lambda n: n.customers.import_credit_balance(
+        "cust",
+        {
+            "external_subscription_id": "sub_1",
+            "credit_system_code": "ai",
+            "granted_amount": "5",
+            "remaining_amount": "1",
+        },
+        idempotency_key="i1",
+    ),
+    lambda n: n.customers.import_billing_state(
+        "cust",
+        {
+            "subscription": {
+                "plan_code": "pro",
+                "status": "active",
+                "billing_authority": "external",
+                "external_reference": "ext_1",
+                "current_period_start": STAMP,
+                "current_period_end": "2026-11-15T10:00:00Z",
+            }
+        },
+        idempotency_key="i2",
+    ),
 ]
 
 

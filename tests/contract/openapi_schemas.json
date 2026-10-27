@@ -1,4 +1,22 @@
 {
+  "BillingStateImport": {
+    "properties": [
+      "dry_run",
+      "external_customer_id",
+      "external_entity_id",
+      "id",
+      "replayed",
+      "status",
+      "subscription"
+    ],
+    "required": [
+      "dry_run",
+      "external_customer_id",
+      "replayed",
+      "status",
+      "subscription"
+    ]
+  },
   "BillingSubscriptionOptionsResponse": {
     "properties": [
       "checkout",
@@ -21,6 +39,58 @@
     "required": [
       "cost_event_id",
       "status"
+    ]
+  },
+  "CostIntelligenceReport": {
+    "properties": [
+      "conflicts",
+      "cost_events",
+      "customers",
+      "features",
+      "from",
+      "shared_costs",
+      "summary",
+      "to",
+      "uncosted"
+    ],
+    "required": [
+      "conflicts",
+      "cost_events",
+      "customers",
+      "features",
+      "from",
+      "shared_costs",
+      "summary",
+      "to",
+      "uncosted"
+    ]
+  },
+  "CreditsBalanceImport": {
+    "properties": [
+      "balance_source_id",
+      "credit_system_code",
+      "current_period_start",
+      "dry_run",
+      "expires_at",
+      "external_customer_id",
+      "external_entity_id",
+      "external_subscription_id",
+      "granted_amount",
+      "invoice_created",
+      "operation_id",
+      "remaining_amount",
+      "replayed"
+    ],
+    "required": [
+      "credit_system_code",
+      "current_period_start",
+      "dry_run",
+      "external_customer_id",
+      "external_subscription_id",
+      "granted_amount",
+      "invoice_created",
+      "remaining_amount",
+      "replayed"
     ]
   },
   "CreditsCustomerBalance": {
@@ -257,8 +327,13 @@
       "sub_total_including_taxes_amount_cents",
       "taxes_amount_cents",
       "total_amount_cents",
+      "total_due_amount_cents",
+      "total_offsetted_credit_note_amount_cents",
+      "total_paid_amount_cents",
       "updated_at",
-      "version_number"
+      "version_number",
+      "voided_at",
+      "xml_url"
     ],
     "required": [
       "billing_entity_code",
@@ -281,6 +356,56 @@
       "total_amount_cents",
       "updated_at",
       "version_number"
+    ]
+  },
+  "MarginForecastPoint": {
+    "properties": [
+      "date",
+      "projected_cost",
+      "projected_margin",
+      "projected_revenue"
+    ],
+    "required": [
+      "date",
+      "projected_cost",
+      "projected_margin",
+      "projected_revenue"
+    ]
+  },
+  "MarginForecastResponse": {
+    "properties": [
+      "confidence",
+      "points"
+    ],
+    "required": [
+      "confidence",
+      "points"
+    ]
+  },
+  "MarginSimulationResult": {
+    "properties": [
+      "current_cost_cents",
+      "current_margin_cents",
+      "current_revenue_cents",
+      "event_count",
+      "margin_delta_cents",
+      "metric_code",
+      "new_cost_cents",
+      "new_margin_cents",
+      "new_revenue_cents",
+      "revenue_delta_cents"
+    ],
+    "required": [
+      "current_cost_cents",
+      "current_margin_cents",
+      "current_revenue_cents",
+      "event_count",
+      "margin_delta_cents",
+      "metric_code",
+      "new_cost_cents",
+      "new_margin_cents",
+      "new_revenue_cents",
+      "revenue_delta_cents"
     ]
   },
   "PlanObject": {
@@ -416,8 +541,11 @@
       "effective_on",
       "external_customer_id",
       "external_subscription_id",
+      "mandate_cap_exceeded",
       "new_amount_cents",
       "outcome",
+      "price_change",
+      "price_increase",
       "skip_reason"
     ],
     "required": [
@@ -453,6 +581,58 @@
     "required": [
       "engine",
       "ok"
+    ]
+  },
+  "SharedCostAllocationPreview": {
+    "properties": [
+      "allocation_period_end",
+      "allocation_period_start",
+      "allocations",
+      "consumer_count",
+      "currency",
+      "eligibility_period_end",
+      "eligibility_period_start",
+      "recognized_amount"
+    ],
+    "required": [
+      "allocation_period_end",
+      "allocation_period_start",
+      "allocations",
+      "consumer_count",
+      "currency",
+      "eligibility_period_end",
+      "eligibility_period_start",
+      "recognized_amount"
+    ]
+  },
+  "SharedCostAllocationRun": {
+    "properties": [
+      "allocation_period_end",
+      "allocation_period_start",
+      "consumer_count",
+      "currency",
+      "id",
+      "recognized_amount",
+      "status"
+    ],
+    "required": [
+      "allocation_period_end",
+      "allocation_period_start",
+      "consumer_count",
+      "currency",
+      "id",
+      "recognized_amount",
+      "status"
+    ]
+  },
+  "SharedCostCustomerAllocation": {
+    "properties": [
+      "amount",
+      "external_customer_id"
+    ],
+    "required": [
+      "amount",
+      "external_customer_id"
     ]
   }
 }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.18.0 — 2026-10-27
+
+### Added
+
+- `customers.import_billing_state(customer_id, body, *, idempotency_key)` imports a subscription another system already bills (Core `POST /customers/{customer_id}/billing-state-imports`; the SDK wraps `body` in `billing_state_import`), and `customers.import_credit_balance(customer_id, body, *, idempotency_key)` records its opening credit balance (Engine `POST /customers/{customer_id}/credit-balance-imports`). Both need a secret key and an idempotency key of at most 255 bytes, return the unwrapped import and raise `NozleAPIError` on failure. Same on `AsyncNozle`.
+- `margin.forecast(**params)` (`GET /margin/forecast`) and `margin.simulate(metric_code, new_price_dollars, **params)` (`POST /margin/simulate`), with typed results.
+- `cost_intelligence.report(from_date=None, to_date=None, limit=None)`, `cost_intelligence.preview_shared_cost_allocation(pool_id, allocation_period_start)` and `cost_intelligence.allocate_shared_cost(pool_id, allocation_period_start)` (Engine `/cost-intelligence/*`, secret keys).
+
 ## 0.17.0 — 2026-10-26
 
 ### Added
