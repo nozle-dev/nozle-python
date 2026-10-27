@@ -456,13 +456,14 @@ what to do next. Branch on `type`; a browser callback alone never proves payment
 
 | `type` | Provider | Next step |
 | --- | --- | --- |
-| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then poll `checkout_status(checkout_id)` |
+| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then confirm as described below (Stripe: `checkout_id` is the Stripe session id, not a status id) |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
 | `processing` | Razorpay or Stripe | Recover with `checkout_status(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now: credits covered it, or the change takes effect later |
 
 **Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded
-form. Redirect the customer to `url`. Pass `cancel_url=` to choose
+form. `checkout_id` of a Stripe result is the Stripe session id (`cs_...`), which
+`checkout_status` does not accept. An upgrade session lasts 35 minutes, an Entity batch 23 hours. Redirect the customer to `url`. Pass `cancel_url=` to choose
 where Stripe sends a customer who leaves the page (validated like `return_url`, defaults to
 it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with
 the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url`
@@ -476,8 +477,13 @@ result = nozle.checkout(
     cancel_url="https://app.example.com/pricing",
 )
 if result["type"] == "hosted":
-    # Redirect the customer to result["url"]. After they return, poll
-    # nozle.checkout_status(result["checkout_id"]): "checkout" is "completed" once paid.
+    # Redirect the customer to result["url"].
+    # Paid upgrade (result["plan_upgrade_intent_id"]): after they return, poll
+    #   nozle.checkout_status(intent_id, customer_id=..., subscription_id=...);
+    #   status is awaiting_payment (hosted nested), processing, succeeded or expired.
+    # New subscription or invoice (result["invoice_id"]): there is no status call. The customer
+    #   returns to your return URL; confirm with the invoice.payment_succeeded or subscription
+    #   webhook, or by reloading billing state (can() or the subscription read).
     ...
 ```
 

@@ -328,6 +328,10 @@ class _BaseNozle(Resource[M]):
         customer_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
     ) -> Steps[CheckoutStatus]:
+        """Status of a paid upgrade (pass its ``plan_upgrade_intent_id`` with the customer and
+        subscription) or of a Razorpay operation. Not a Stripe ``checkout_id`` (``cs_...``): a
+        new-subscription or invoice Stripe checkout has no status call, so confirm it through
+        webhooks or by reloading billing state."""
         operation = "checkout_status"
         require_secret_key(self.api_key, operation)
         require_non_empty(checkout_id, "checkout_id", operation)

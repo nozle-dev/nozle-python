@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkout_invoice()`, plan change or Entity checkout returns `{"type": "hosted", "url", "payment_url", "checkout_id", ...}`: redirect the customer to `url`, then poll `checkout_status(checkout_id)`. The `type: "stripe"` result, `StripeCheckoutResult` and every `client_secret` / `clientSecret` are removed, including on `entity_subscriptions.checkout_many()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
+- **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkout_invoice()`, plan change or Entity checkout returns `{"type": "hosted", "url", "payment_url", "checkout_id", ...}`: redirect the customer to `url`. Only a paid upgrade has a status call (`checkout_status(plan_upgrade_intent_id, ...)`); a Stripe `checkout_id` is the session id, not a status id, so confirm a new subscription or invoice through webhooks or by reloading billing state. The `type: "stripe"` result, `StripeCheckoutResult` and every `client_secret` / `clientSecret` are removed, including on `entity_subscriptions.checkout_many()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
 - The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
 
 ## 0.17.0 — 2026-10-26
