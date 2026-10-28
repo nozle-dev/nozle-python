@@ -528,12 +528,14 @@ if result["type"] == "hosted":
     ...
 ```
 
-Idempotency keys have two Stripe edge cases today. A new-subscription checkout retried
-while the subscription is still `incomplete` fails with HTTP 422 `validation_errors`
-containing `subscription_incomplete`, even with the same key; recover by calling
-`checkout_invoice()` with the `invoice_id` from the first response. An invoice checkout
-retried with the same key and a different body currently returns HTTP 500, not 409, so
-keep the body identical for one key.
+A new-subscription checkout retried while the first attempt is unpaid reopens payment
+for the same invoice when the plan is the same (or returns `completed` if it was paid
+meanwhile). For another plan, the unpaid attempt is expired and replaced, or the request
+gets HTTP 409 `subscription_checkout_in_progress`
+(`entity_subscription_checkout_in_progress` for an Entity checkout) when it cannot be
+expired yet. Keep the body identical for one idempotency key: a different request with
+the same key gets HTTP 409 `idempotency_key_reused`, including an invoice checkout.
+Checkout error bodies carry `status`, `error` and `code`.
 
 **Razorpay.** Razorpay supports only INR. Return the `razorpay` result to the browser,
 open the modal there, and post the handler's three fields back to your backend.
