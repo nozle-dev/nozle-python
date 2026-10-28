@@ -7,7 +7,16 @@ from nozle._operation import M, Resource, Steps, endpoint
 from nozle._transport import BaseTransport, HttpTransport
 from nozle._validation import require_non_empty, require_secret_key
 from nozle.errors import NozleValidationError
-from nozle.types import MarginForecast, MarginSimulation
+from nozle.types import (
+    MarginByCustomer,
+    MarginByMetric,
+    MarginByModel,
+    MarginByPlan,
+    MarginForecast,
+    MarginSimulation,
+    MarginSummary,
+    MarginTrend,
+)
 
 
 class MarginClient(Resource[M]):
@@ -27,34 +36,34 @@ class MarginClient(Resource[M]):
         super().__init__(transport, api_key)
 
     @endpoint
-    def summary(self, **params: Optional[str]) -> Steps[Any]:
-        return (yield from self._get("summary", "/summary", params))
+    def summary(self, **params: Optional[str]) -> Steps[MarginSummary]:
+        return cast(MarginSummary, (yield from self._get("summary", "/summary", params)))
 
     @endpoint
-    def by_customer(self, **params: Optional[str]) -> Steps[Any]:
-        return (yield from self._get("by_customer", "/customers", params))
+    def by_customer(self, **params: Optional[str]) -> Steps[MarginByCustomer]:
+        return cast(MarginByCustomer, (yield from self._get("by_customer", "/customers", params)))
 
     @endpoint
-    def by_metric(self, **params: Optional[str]) -> Steps[Any]:
-        return (yield from self._get("by_metric", "/metrics", params))
+    def by_metric(self, **params: Optional[str]) -> Steps[MarginByMetric]:
+        return cast(MarginByMetric, (yield from self._get("by_metric", "/metrics", params)))
 
     @endpoint
-    def by_plan(self, **params: Optional[str]) -> Steps[Any]:
-        return (yield from self._get("by_plan", "/plans", params))
+    def by_plan(self, **params: Optional[str]) -> Steps[MarginByPlan]:
+        return cast(MarginByPlan, (yield from self._get("by_plan", "/plans", params)))
 
     @endpoint
-    def by_model(self, **params: Optional[str]) -> Steps[Any]:
-        return (yield from self._get("by_model", "/models", params))
+    def by_model(self, **params: Optional[str]) -> Steps[MarginByModel]:
+        return cast(MarginByModel, (yield from self._get("by_model", "/models", params)))
 
     @endpoint
     def trend(
         self,
         granularity: Literal["hour", "day", "week", "month"] = "day",
         **params: Optional[str],
-    ) -> Steps[Any]:
+    ) -> Steps[MarginTrend]:
         query = {key: value for key, value in params.items() if value is not None}
         query["granularity"] = granularity
-        return (yield from self._get("trend", "/trend", query))
+        return cast(MarginTrend, (yield from self._get("trend", "/trend", query)))
 
     @endpoint
     def forecast(self, **params: Optional[str]) -> Steps[MarginForecast]:
