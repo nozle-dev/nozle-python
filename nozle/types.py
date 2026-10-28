@@ -883,6 +883,89 @@ class PlanVersionMigrationPreview(TypedDict):
     items: List[PlanVersionMigrationPreviewItem]
 
 
+class MarginSummary(TypedDict):
+    """``GET /margin/summary``: amounts are integer cents."""
+
+    total_revenue_cents: int
+    total_cost_cents: int
+    total_margin_cents: int
+    margin_percent: float
+    event_count: int
+
+
+class MarginCustomerRow(TypedDict):
+    customer_id: str
+    customer_name: str
+    revenue_cents: int
+    cost_cents: int
+    margin_cents: int
+    event_count: int
+
+
+class MarginMetricRow(TypedDict):
+    metric_code: str
+    revenue_cents: int
+    cost_cents: int
+    margin_cents: int
+    event_count: int
+
+
+class MarginPlanRow(TypedDict):
+    plan_id: str
+    revenue_cents: int
+    cost_cents: int
+    margin_cents: int
+    event_count: int
+
+
+class MarginModelRow(TypedDict):
+    model: str
+    revenue_cents: int
+    cost_cents: int
+    margin_cents: int
+    event_count: int
+
+
+class MarginByCustomer(TypedDict):
+    """``GET /margin/customers``: ``customers`` is None when there are none."""
+
+    customers: Optional[List[MarginCustomerRow]]
+
+
+class MarginByMetric(TypedDict):
+    """``GET /margin/metrics``: ``metrics`` is None when there are none."""
+
+    metrics: Optional[List[MarginMetricRow]]
+
+
+class MarginByPlan(TypedDict):
+    """``GET /margin/plans``: ``plans`` is None when there are none."""
+
+    plans: Optional[List[MarginPlanRow]]
+
+
+class MarginByModel(TypedDict):
+    """``GET /margin/models``: ``models`` is None when there are none."""
+
+    models: Optional[List[MarginModelRow]]
+
+
+class MarginTrendPoint(TypedDict):
+    period: str
+    revenue_cents: int
+    cost_cents: int
+    margin_cents: int
+    margin_percent: float
+    event_count: int
+
+
+class MarginTrend(TypedDict):
+    """``GET /margin/trend``: ``trend`` is None when the range has no events."""
+
+    granularity: str
+    trend: Optional[List[MarginTrendPoint]]
+
+
 class MarginForecastPoint(TypedDict):
     date: str
     projected_revenue: int

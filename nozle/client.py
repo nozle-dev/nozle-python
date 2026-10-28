@@ -26,7 +26,7 @@ from nozle.credits import CreditsNamespace
 from nozle.customers import CustomersNamespace
 from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
-from nozle.errors import NozleAPIError, NozleValidationError
+from nozle.errors import NO_ACTIVE_SUBSCRIPTION, NozleAPIError, NozleValidationError
 from nozle.events import EventsNamespace
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
@@ -142,7 +142,7 @@ class _BaseNozle(Resource[M]):
         self,
         customer_id: str,
         feature: str,
-        metadata: Optional[Mapping[str, str]] = None,
+        metadata: Optional[Mapping[str, Union[str, int, float, bool]]] = None,
         *,
         subscription_id: Optional[str] = None,
         entity_id: Optional[str] = None,
@@ -879,7 +879,7 @@ class _BaseNozle(Resource[M]):
                 operation,
                 422,
                 {
-                    "code": "active_subscription_not_found",
+                    "code": NO_ACTIVE_SUBSCRIPTION,
                     "error": f"no active subscription for customer {customer_id!r}",
                 },
             )

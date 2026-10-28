@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.20.0 — 2026-10-28
+
+### Added
+
+- Typed margin results: `MarginSummary`, `MarginByCustomer`, `MarginByMetric`, `MarginByPlan`, `MarginByModel`, `MarginTrend` (and their row types), from the Engine schemas, returned by `margin.summary()`, `by_customer()`, `by_metric()`, `by_plan()`, `by_model()` and `trend()`.
+- `NO_ACTIVE_SUBSCRIPTION`: `NozleAPIError.has_code("active_subscription_not_found")` is also true for Core's `subscription_not_found`, so a customer with no active subscription is one case.
+
+### Changed
+
+- `can()` metadata is typed as string, number or boolean values (the Engine accepts any JSON object).
+- Already in place, now covered by tests: the error message carries the server text, and an HTTP-date `Retry-After` is read for `retry_after` and for the retry delay.
+
 ## 0.19.0 — 2026-10-27
 
 ### Added

@@ -1019,3 +1019,53 @@ def test_usage_track_reuses_its_timestamp_for_a_retry_of_the_same_key(
     assert stamps[0] == stamps[1]
     assert stamps[2] != stamps[0]
     assert stamps[3] == "2026-01-01T00:00:00Z"
+
+
+def test_api_error_message_carries_the_server_text(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.get(
+        "https://api.example/engine/api/v1/margin/summary",
+        status_code=400,
+        json={"code": "invalid_date_range", "error": "from must be before to"},
+    )
+    with pytest.raises(NozleAPIError) as raised:
+        Nozle("sk_test", base_url="https://api.example/engine").margin.summary()
+    assert "from must be before to" in str(raised.value)
+    assert raised.value.has_code("invalid_date_range")
+
+
+def test_no_active_subscription_is_one_code() -> None:
+    from nozle import NO_ACTIVE_SUBSCRIPTION
+
+    core = NozleAPIError("x", 404, {"code": "subscription_not_found"})
+    sdk = NozleAPIError("x", 422, {"code": NO_ACTIVE_SUBSCRIPTION})
+    assert core.has_code(NO_ACTIVE_SUBSCRIPTION) and sdk.has_code(NO_ACTIVE_SUBSCRIPTION)
+    assert not NozleAPIError("x", 404, {"code": "other"}).has_code(NO_ACTIVE_SUBSCRIPTION)
+
+
+def test_can_accepts_number_and_boolean_metadata(requests_mock: requests_mock.Mocker) -> None:
+    matcher = requests_mock.get(
+        "https://api.example/engine/api/v1/can", json={"allowed": True, "used": 0}
+    )
+    Nozle("sk_test", base_url="https://api.example/engine").can(
+        "cust_1", "feature", {"model": "gpt", "tokens": 5, "cached": True}
+    )
+    assert matcher.last_request.qs["metadata"] == ['{"model": "gpt", "tokens": 5, "cached": true}']
+
+
+def test_margin_results_are_typed(requests_mock: requests_mock.Mocker) -> None:
+    from nozle import MarginSummary
+
+    requests_mock.get(
+        "https://api.example/engine/api/v1/margin/summary",
+        json={
+            "total_revenue_cents": 100,
+            "total_cost_cents": 40,
+            "total_margin_cents": 60,
+            "margin_percent": 60.0,
+            "event_count": 3,
+        },
+    )
+    summary: MarginSummary = Nozle(
+        "sk_test", base_url="https://api.example/engine"
+    ).margin.summary()
+    assert summary["total_margin_cents"] == 60

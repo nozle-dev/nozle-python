@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+#: The one code for a customer with no active subscription. Core's ``subscription_not_found``
+#: counts as the same case in :meth:`NozleAPIError.has_code`.
+NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found"
+
 
 class NozleError(Exception):
     """Base exception for the Nozle SDK."""
@@ -64,7 +68,9 @@ class NozleAPIError(NozleError):
         ``razorpay_requires_inr`` or ``invalid_checkout_signature``, under
         ``error_details``.
         """
-        if self.code == code:
+        if self.code == code or (
+            code == NO_ACTIVE_SUBSCRIPTION and self.code == "subscription_not_found"
+        ):
             return True
         details = self.response_details
         listed = details.get("error_details") if isinstance(details, dict) else None
