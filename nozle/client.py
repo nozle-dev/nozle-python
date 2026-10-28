@@ -72,6 +72,31 @@ def _resolve_api_key(api_key: Optional[str]) -> str:
     return api_key
 
 
+def _plan_fields(
+    operation: str,
+    plan_code: Optional[str],
+    plan_family_code: Optional[str],
+    interval: Optional[str],
+    currency: Optional[str],
+) -> Dict[str, str]:
+    """What to sell: ``plan_code``, or ``plan_family_code`` + ``interval`` (+ ``currency``)."""
+    if plan_family_code is None:
+        if interval is not None or currency is not None:
+            raise NozleValidationError(
+                f"{operation} takes interval and currency only with plan_family_code"
+            )
+        return {"plan_code": require_non_empty(plan_code or "", "plan_code", operation)}
+    if plan_code is not None:
+        raise NozleValidationError(f"{operation} takes plan_code or plan_family_code, not both")
+    fields = {
+        "plan_family_code": require_non_empty(plan_family_code, "plan_family_code", operation),
+        "interval": require_non_empty(interval or "", "interval", operation),
+    }
+    if currency:
+        fields["currency"] = currency
+    return fields
+
+
 class _BaseNozle(Resource[M]):
     """Everything ``Nozle`` and ``AsyncNozle`` share. Each method is written once and runs on the
     client's transport (see ``nozle._operation``)."""
@@ -166,9 +191,16 @@ class _BaseNozle(Resource[M]):
         )
 
     @endpoint
-    def plans(self) -> Steps[list[Plan]]:
+    def plans(
+        self, *, currency: Optional[str] = None, external_customer_id: Optional[str] = None
+    ) -> Steps[list[Plan]]:
+        """The plan catalog. Family plans are listed in ``currency``, else the locked currency of
+        ``external_customer_id``, else each family's default currency; an unknown currency is a 422.
+        A family plan carries ``family`` and ``prices`` (every variant)."""
         require_catalog_key(self.api_key)
-        payload = yield self._engine.call("plans", "GET", "/api/v1/plans")
+        query = {"currency": currency, "external_customer_id": external_customer_id}
+        params = {key: value for key, value in query.items() if value}
+        payload = yield self._engine.call("plans", "GET", "/api/v1/plans", params=params or None)
         if not isinstance(payload, Mapping):
             raise NozleAPIError("plans", 200, "response was not a JSON object")
         plans = payload.get("plans")
@@ -182,9 +214,12 @@ class _BaseNozle(Resource[M]):
     def checkout(
         self,
         customer_id: str,
-        plan_code: str,
+        plan_code: Optional[str] = None,
         return_url: Optional[str] = None,
         *,
+        plan_family_code: Optional[str] = None,
+        interval: Optional[str] = None,
+        currency: Optional[str] = None,
         success_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         register_mandate: Optional[bool] = None,
@@ -196,7 +231,7 @@ class _BaseNozle(Resource[M]):
         operation = "checkout"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
-        require_non_empty(plan_code, "plan_code", operation)
+        plan = _plan_fields(operation, plan_code, plan_family_code, interval, currency)
         if return_url is not None and success_url is not None and return_url != success_url:
             raise NozleValidationError(
                 "checkout received conflicting return_url and deprecated success_url values"
@@ -204,7 +239,7 @@ class _BaseNozle(Resource[M]):
         resolved_return_url = return_url if return_url is not None else success_url
         if success_url is not None:
             warn_caller("success_url is deprecated; use return_url", DeprecationWarning)
-        body: dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
+        body: dict[str, Any] = {**plan, "customer_id": customer_id}
         if subscription_id is not None:
             require_non_empty(subscription_id, "subscription_id", operation)
             body["subscription_id"] = subscription_id
@@ -448,17 +483,25 @@ class _BaseNozle(Resource[M]):
 
     @endpoint
     def subscribe(
-        self, customer_id: str, plan_code: str, *, plan_version: Optional[int] = None
+        self,
+        customer_id: str,
+        plan_code: Optional[str] = None,
+        *,
+        plan_version: Optional[int] = None,
+        plan_family_code: Optional[str] = None,
+        interval: Optional[str] = None,
+        currency: Optional[str] = None,
     ) -> Steps[SubscribeResult]:
         """Subscribe the customer to the current version of the plan, or to ``plan_version``
         (for example to keep selling an older price). The same customer and code again keep the
         subscription's own version; another version of an existing subscription raises a 422
-        ``plan_version_change_not_supported``."""
+        ``plan_version_change_not_supported``. ``plan_family_code`` with ``interval`` (and
+        optional ``currency``) replaces ``plan_code``: Core picks the family's variant."""
         operation = "subscribe"
         require_secret_key(self.api_key, operation)
         require_non_empty(customer_id, "customer_id", operation)
-        require_non_empty(plan_code, "plan_code", operation)
-        body: Dict[str, Any] = {"plan_code": plan_code, "customer_id": customer_id}
+        plan = _plan_fields(operation, plan_code, plan_family_code, interval, currency)
+        body: Dict[str, Any] = {**plan, "customer_id": customer_id}
         if plan_version is not None:
             if (
                 isinstance(plan_version, bool)

@@ -1069,3 +1069,84 @@ def test_margin_results_are_typed(requests_mock: requests_mock.Mocker) -> None:
         "sk_test", base_url="https://api.example/engine"
     ).margin.summary()
     assert summary["total_margin_cents"] == 60
+
+
+def test_plans_send_currency_and_customer_and_return_family_and_prices(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    plan = {
+        "code": "pro_eur",
+        "name": "Pro",
+        "amount_cents": 4500,
+        "amount_currency": "EUR",
+        "interval": "monthly",
+        "family": {"code": "pro", "currencies": ["USD", "EUR"], "default_currency": "USD"},
+        "prices": [
+            {"currency": "USD", "interval": "monthly", "plan_code": "pro", "amount_cents": 4900},
+            {
+                "currency": "EUR",
+                "interval": "monthly",
+                "plan_code": "pro_eur",
+                "amount_cents": 4500,
+            },
+        ],
+    }
+    requests_mock.get("https://api.example/engine/api/v1/plans", json={"plans": [plan]})
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    assert client.plans(currency="EUR", external_customer_id="cus 1") == [plan]
+    assert requests_mock.last_request.qs == {"currency": ["eur"], "external_customer_id": ["cus 1"]}
+    client.plans()
+    assert requests_mock.last_request.query == ""
+
+
+def test_checkout_and_subscribe_by_plan_family(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.post(
+        "https://api.example/engine/api/v1/checkout", json={"type": "completed", "status": "ok"}
+    )
+    requests_mock.post(
+        "https://api.example/engine/api/v1/subscribe",
+        json={"subscription_id": "s", "status": "active"},
+    )
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    client.checkout(
+        "cust",
+        return_url="https://app.example/done",
+        plan_family_code="pro",
+        interval="yearly",
+        currency="EUR",
+    )
+    assert requests_mock.last_request.json() == {
+        "plan_family_code": "pro",
+        "interval": "yearly",
+        "currency": "EUR",
+        "customer_id": "cust",
+        "return_url": "https://app.example/done",
+    }
+    client.subscribe("cust", plan_family_code="pro", interval="monthly")
+    assert requests_mock.last_request.json() == {
+        "plan_family_code": "pro",
+        "interval": "monthly",
+        "customer_id": "cust",
+    }
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"plan_code": "pro", "plan_family_code": "pro", "interval": "monthly"}, "not both"),
+        ({"plan_family_code": "pro"}, "requires interval"),
+        ({"plan_code": "pro", "currency": "EUR"}, "only with plan_family_code"),
+        ({}, "requires plan_code"),
+    ],
+)
+def test_plan_family_selection_is_validated_before_network(
+    requests_mock: requests_mock.Mocker, kwargs: dict, message: str
+) -> None:
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    with pytest.raises(NozleValidationError, match=message):
+        client.checkout("cust", **kwargs)
+    with pytest.raises(NozleValidationError, match=message):
+        client.subscribe("cust", **kwargs)
+    assert requests_mock.request_history == []
