@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from nozle.errors import NozleAPIError
@@ -47,28 +47,10 @@ def checkout_status(status: str) -> str:
 
 
 class PlanService:
-    def __init__(
-        self, sdk: Any, store: Any, return_origin: str, stripe_publishable_key: Optional[str] = None
-    ) -> None:
+    def __init__(self, sdk: Any, store: Any, return_origin: str) -> None:
         self.sdk = sdk
         self.store = store
         self.return_origin = return_origin
-        if stripe_publishable_key and not stripe_publishable_key.startswith(
-            ("pk_test_", "pk_live_")
-        ):
-            raise ValueError("STRIPE_PUBLISHABLE_KEY must be a Stripe publishable key")
-        self.stripe_publishable_key = stripe_publishable_key
-
-    def payment(self, result: Any) -> Any:
-        if (
-            result
-            and result.get("type") == "stripe"
-            and not result.get("url")
-            and not result.get("publishable_key")
-            and self.stripe_publishable_key
-        ):
-            return {**result, "publishable_key": self.stripe_publishable_key}
-        return result
 
     def load(self, customer_id: str, subscription_id: str) -> dict[str, Any]:
         options = self.sdk.subscription_options(customer_id, subscription_id)
@@ -81,7 +63,7 @@ class PlanService:
             )
             status = checkout_status(current["status"])
             if status in ("awaiting_payment", "processing"):
-                checkout = self.payment(current.get("checkout"))
+                checkout = current.get("checkout")
         if status not in (
             "none",
             "awaiting_payment",
@@ -250,15 +232,13 @@ class PlanService:
                         "effective_at": changed["effective_at"],
                         "currency": changed.get("currency"),
                     }
-                return self.payment(
-                    self.sdk.checkout(
-                        customer_id,
-                        target,
-                        return_url,
-                        subscription_id=subscription_id,
-                        quote_id=quote_id,
-                        idempotency_key=key,
-                    )
+                return self.sdk.checkout(
+                    customer_id,
+                    target,
+                    return_url,
+                    subscription_id=subscription_id,
+                    quote_id=quote_id,
+                    idempotency_key=key,
                 )
 
             return self.once(customer_id, body, "change", prepare, apply)

@@ -353,8 +353,12 @@ def test_can_limit_and_remaining_may_be_null(
 @pytest.mark.parametrize(
     "result",
     [
-        {"type": "stripe", "client_secret": "cs_test"},
-        {"type": "stripe", "url": "https://checkout.stripe.example/session"},
+        {
+            "type": "hosted",
+            "url": "https://checkout.stripe.com/c/pay/cs_test",
+            "payment_url": "https://checkout.stripe.com/c/pay/cs_test",
+            "checkout_id": "cs_test",
+        },
         {"type": "completed", "status": "active", "subscription_id": "sub_1"},
         {"type": "scheduled", "status": "scheduled", "plan_code": "starter"},
     ],
@@ -377,12 +381,41 @@ def test_checkout_preserves_every_result_variant_and_uses_return_url(
     }
 
 
+def test_checkout_sends_cancel_url_and_keeps_the_session_id_placeholder(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.post(
+        "https://api.example/engine/api/v1/checkout",
+        json={"type": "hosted", "url": "https://checkout.stripe.com/c/pay/cs_test"},
+    )
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    client.checkout(
+        "cust_1",
+        "pro",
+        return_url="https://merchant.example/done?s={CHECKOUT_SESSION_ID}",
+        cancel_url="https://merchant.example/pricing",
+    )
+    assert requests_mock.last_request.json() == {
+        "plan_code": "pro",
+        "customer_id": "cust_1",
+        "return_url": "https://merchant.example/done?s={CHECKOUT_SESSION_ID}",
+        "cancel_url": "https://merchant.example/pricing",
+    }
+
+    client.checkout_invoice("inv_1", cancel_url="https://merchant.example/pricing")
+    assert requests_mock.last_request.json() == {
+        "invoice_id": "inv_1",
+        "cancel_url": "https://merchant.example/pricing",
+    }
+
+
 def test_checkout_accepts_deprecated_success_url_but_never_sends_both(
     requests_mock: requests_mock.Mocker,
 ) -> None:
     requests_mock.post(
         "https://api.nozle.app/engine/api/v1/checkout",
-        json={"type": "stripe", "client_secret": "cs_test"},
+        json={"type": "hosted", "url": "https://checkout.stripe.com/c/pay/cs_test"},
     )
     client = Nozle("sk_test")
 

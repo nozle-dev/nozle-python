@@ -75,28 +75,6 @@ class Plan(_PlanRequired, total=False):
     is_current: bool
 
 
-class _StripeCheckoutRequired(TypedDict):
-    type: Literal["stripe"]
-
-
-class StripeCheckoutResult(_StripeCheckoutRequired, total=False):
-    # Plan and invoice checkout never return publishable_key, stripe_account or url:
-    # use your own Stripe publishable key and mount the embedded Checkout Session
-    # client_secret.
-    publishable_key: str
-    stripe_account: str
-    checkout_id: str
-    client_secret: str
-    clientSecret: str
-    url: str
-    invoice_id: str
-    plan_upgrade_intent_id: str
-    amount_cents: int
-    currency: str
-    external_entity_id: str
-    external_subscription_id: str
-
-
 class _CompletedCheckoutRequired(TypedDict):
     type: Literal["completed"]
     status: str
@@ -245,11 +223,12 @@ class ProcessingCheckoutResult(_ProcessingCheckoutRequired, total=False):
 
 class _HostedCheckoutRequired(TypedDict):
     type: Literal["hosted"]
+    url: str
     payment_url: str
 
 
 class HostedCheckoutResult(_HostedCheckoutRequired, total=False):
-    """A Razorpay payment link: redirect the customer to payment_url."""
+    """A hosted page (Stripe Checkout or a Razorpay link): redirect the customer to url."""
 
     checkout_id: str
     amount_cents: int
@@ -257,6 +236,8 @@ class HostedCheckoutResult(_HostedCheckoutRequired, total=False):
     expires_at: str
     invoice_id: str
     plan_upgrade_intent_id: str
+    external_entity_id: str
+    external_subscription_id: str
 
 
 class RazorpayVerification(TypedDict):
@@ -266,7 +247,6 @@ class RazorpayVerification(TypedDict):
 
 
 CheckoutResult = Union[
-    StripeCheckoutResult,
     CompletedCheckoutResult,
     ScheduledCheckoutResult,
     RazorpayCheckoutResult,
@@ -351,9 +331,8 @@ class EntitySubscriptionCheckoutItemResult(TypedDict):
 
 class _EntitySubscriptionCheckoutManyRequired(TypedDict):
     id: str
-    type: Literal["stripe", "razorpay", "processing", "completed"]
+    type: Literal["hosted", "razorpay", "processing", "completed"]
     status: str
-    client_secret: Optional[str]
     invoice_id: str
     amount_cents: int
     currency: str
@@ -363,6 +342,9 @@ class _EntitySubscriptionCheckoutManyRequired(TypedDict):
 
 
 class EntitySubscriptionCheckoutManyResult(_EntitySubscriptionCheckoutManyRequired, total=False):
+    #: Hosted result: redirect the customer here.
+    url: str
+    payment_url: str
     checkout_id: str
     key_id: str
     order_id: str

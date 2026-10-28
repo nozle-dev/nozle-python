@@ -41,8 +41,8 @@ def test_entity_subscription_ensure_get_and_checkout(
     requests_mock.post(
         f"{path}/checkout",
         json={
-            "type": "stripe",
-            "client_secret": "cs_entity",
+            "type": "hosted",
+            "url": "https://checkout.stripe.com/c/pay/cs_entity",
             "external_entity_id": "user/42",
             "external_subscription_id": "entity-sub-1",
         },
@@ -60,7 +60,7 @@ def test_entity_subscription_ensure_get_and_checkout(
         idempotency_key="checkout-user-42-pro",
     )
 
-    assert result["type"] == "stripe"
+    assert result["type"] == "hosted"
     assert requests_mock.last_request.headers["Idempotency-Key"] == "checkout-user-42-pro"
     assert requests_mock.last_request.json() == {
         "plan_code": "pro",
@@ -107,9 +107,9 @@ def test_bulk_entity_subscription_checkout(requests_mock: requests_mock.Mocker) 
         json={
             "entity_subscription_checkout": {
                 "id": "batch-1",
-                "type": "stripe",
+                "type": "hosted",
                 "status": "open",
-                "client_secret": "cs_bulk",
+                "url": "https://checkout.stripe.com/c/pay/cs_bulk",
                 "invoice_id": "invoice-1",
                 "amount_cents": 4498,
                 "currency": "USD",
@@ -136,7 +136,7 @@ def test_bulk_entity_subscription_checkout(requests_mock: requests_mock.Mocker) 
         items=[{"external_entity_id": "seat-pro-1", "plan_code": "pro"}],
     )
 
-    assert result["client_secret"] == "cs_bulk"
+    assert result["url"] == "https://checkout.stripe.com/c/pay/cs_bulk"
     assert requests_mock.last_request.headers["Idempotency-Key"] == "workspace-1-seat-purchase"
     assert requests_mock.last_request.json() == {
         "entity_subscription_checkout": {

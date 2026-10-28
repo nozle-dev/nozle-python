@@ -78,9 +78,8 @@ checkout = nozle.checkout(
 
 Checkout can return any production transition shape:
 
-- `{"type": "stripe", "client_secret": "cs_..."}`: Stripe embedded Checkout Session
+- `{"type": "hosted", "url": "https://checkout.stripe.com/...", "checkout_id": "cs_..."}`: the Stripe-hosted Checkout page; redirect the customer to `url`
 - `{"type": "razorpay", "key_id": "...", "order_id": "..."}`: Razorpay order for the modal
-- `{"type": "hosted", "payment_url": "https://..."}`: declared in the result types; `POST /checkout` does not return it for Razorpay (invoice payment URLs and credit top-ups return a `payment_url` with no checkout id to poll)
 - `{"type": "processing", "checkout_id": "...", "status": "..."}`: Razorpay order not ready, or a Stripe quoted upgrade replayed while its webhook is pending
 - `{"type": "completed", "status": "..."}`
 - `{"type": "scheduled", "status": "..."}`
@@ -161,8 +160,8 @@ checkout = nozle.entity_subscriptions.checkout_many(
 )
 ```
 
-Return the checkout result to the authenticated frontend and mount
-`checkout["client_secret"]` using `@nozle-js/react`. Never expose the secret key.
+Return the checkout result to the authenticated frontend and redirect the customer to
+`checkout["url"]` (Stripe) or open the Razorpay modal. Never expose the secret key.
 
 ### Customers and Credit Systems
 
@@ -478,6 +477,18 @@ the successful provider response or completed stream is preserved and a
 `NozleAuthenticationError`; transport failures use `NozleTransportError`. Exception
 messages redact API keys and secret-shaped response fields.
 
+### Workspace suspended or card required (402)
+
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. `NozleAPIError` has `status_code` 402 and `code` `workspace_suspended` from `can()`, `track()`, `usage.check()` and every other call (sync and async); `can()` raises instead of returning `allowed: False`. Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
+
+```python
+try:
+    nozle.can("cust_123", "code_completion")
+except NozleAPIError as error:
+    if error.code == "workspace_suspended":
+        ...  # tell your team to pay the Nozle invoices; not allowed, not denied
+```
+
 ### Payment providers: Stripe and Razorpay
 
 `checkout()` and `checkout_invoice()` use the payment provider connected to your
@@ -486,29 +497,35 @@ what to do next. Branch on `type`; a browser callback alone never proves payment
 
 | `type` | Provider | Next step |
 | --- | --- | --- |
-| `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
+| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then confirm as described below (Stripe: `checkout_id` is the Stripe session id, not a status id) |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
-| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
 | `processing` | Razorpay or Stripe | Recover with `checkout_status(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now: credits covered it, or the change takes effect later |
 
-**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They
-never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the
-`pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes
-it as `publishableKey`). Credit top-up purchases are different: they return a
-Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
+**Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded
+form. `checkout_id` of a Stripe result is the Stripe session id (`cs_...`), which
+`checkout_status` does not accept. An upgrade session lasts 35 minutes, an Entity batch 23 hours. Redirect the customer to `url`. Pass `cancel_url=` to choose
+where Stripe sends a customer who leaves the page (validated like `return_url`, defaults to
+it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with
+the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url`
+(valid for 24 hours).
 
 ```python
 result = nozle.checkout(
     "customer-123",
     "pro_monthly",
     return_url="https://app.example.com/settings/billing",
+    cancel_url="https://app.example.com/pricing",
 )
-if result["type"] == "stripe":
-    # Return the secret to the browser and mount Stripe Embedded Checkout with it.
-    client_secret = result.get("client_secret") or result.get("clientSecret")
-    # A new subscription has no checkout ID to poll: reload the subscription after
-    # Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
+if result["type"] == "hosted":
+    # Redirect the customer to result["url"].
+    # Paid upgrade (result["plan_upgrade_intent_id"]): after they return, poll
+    #   nozle.checkout_status(intent_id, customer_id=..., subscription_id=...);
+    #   status is awaiting_payment (hosted nested), processing, succeeded or expired.
+    # New subscription or invoice (result["invoice_id"]): there is no status call. The customer
+    #   returns to your return URL; confirm with the invoice.payment_succeeded or subscription
+    #   webhook, or by reloading billing state (can() or the subscription read).
+    ...
 ```
 
 Idempotency keys have two Stripe edge cases today. A new-subscription checkout retried
