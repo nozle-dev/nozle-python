@@ -67,12 +67,34 @@ class _PlanRequired(TypedDict):
     interval: str
 
 
+class PlanFamilyRef(TypedDict):
+    """A plan's family as the catalog returns it: the currencies it is sold in, in order, and the
+    default one."""
+
+    code: str
+    currencies: List[str]
+    default_currency: str
+
+
+class PlanPrice(TypedDict):
+    """One variant of a plan family: the plan sold for an interval in a currency."""
+
+    currency: str
+    interval: str
+    plan_code: str
+    amount_cents: int
+
+
 class Plan(_PlanRequired, total=False):
     #: The version of the code this plan is (plan versioning). ``plans()`` returns current versions
     #: only.
     version: int
     #: Whether new subscriptions get this version.
     is_current: bool
+    #: The plan family this plan is a variant of. Absent for a plan without a family.
+    family: PlanFamilyRef
+    #: Every current variant of the family: one price per interval and currency.
+    prices: List[PlanPrice]
 
 
 class _CompletedCheckoutRequired(TypedDict):

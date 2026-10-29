@@ -92,6 +92,25 @@ never sends both fields and rejects conflicting values.
 Backend subscription creation remains available with `nozle.subscribe(customer_id,
 plan_code)`. Both checkout and subscription creation require an `sk_` key.
 
+#### Currencies
+
+A plan family can be sold in several currencies, one plan per interval and currency.
+With a secret key, `plans()` lists every plan in every currency; `plans(currency="EUR")` lists
+only that currency, and `plans(external_customer_id=...)` only the customer's locked currency
+(ignored when your organization allows several currencies per customer). A publishable key
+without `currency` gets each family's default-currency plans.
+A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every
+variant: `currency`, `interval`, `plan_code`, `amount_cents`).
+
+`checkout()` and `subscribe()` take `plan_family_code=`, `interval=` and optional `currency=`
+instead of `plan_code`; Core picks the variant (without `currency`: the customer's locked
+currency, else the family's default). Needs Core 11.10.0.
+
+```python
+nozle.checkout("customer-123", plan_family_code="pro", interval="yearly", currency="EUR",
+               return_url="https://merchant.example/billing/complete")
+```
+
 ### Plan versions
 
 Changing the price of a plan that customers pay for saves it as the plan's next

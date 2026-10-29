@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.21.0 — 2026-10-29
+
+Needs Core 11.10.0 (one plan family sold in several currencies).
+
+### Added
+
+- `plans(currency=None, external_customer_id=None)` sends `currency` and `external_customer_id`. With a secret key and neither, every plan is listed in every currency; `currency` keeps that currency, and `external_customer_id` the customer's locked currency (ignored when the organization allows several currencies per customer). A publishable key without `currency` gets each family's default-currency plans. `Plan` gains `family` (`PlanFamilyRef`: `code`, `currencies`, `default_currency`) and `prices` (`list[PlanPrice]`: `currency`, `interval`, `plan_code`, `amount_cents`).
+- `checkout()` and `subscribe()` accept `plan_family_code=`, `interval=` and `currency=` instead of `plan_code` and send them as such. `plan_code` is now optional; passing both, or `interval`/`currency` without a family, raises `NozleValidationError` before any request.
+
 ## 0.20.0 — 2026-10-28
 
 ### Added
