@@ -194,9 +194,12 @@ class _BaseNozle(Resource[M]):
     def plans(
         self, *, currency: Optional[str] = None, external_customer_id: Optional[str] = None
     ) -> Steps[list[Plan]]:
-        """The plan catalog. Family plans are listed in ``currency``, else the locked currency of
-        ``external_customer_id``, else each family's default currency; an unknown currency is a 422.
-        A family plan carries ``family`` and ``prices`` (every variant)."""
+        """The plan catalog. Without ``currency`` a secret key gets every plan in every currency;
+        ``currency`` keeps that currency only (an unknown one is a 422), and
+        ``external_customer_id`` (secret key only) the customer's locked currency, ignored when the
+        organization allows several currencies per customer. A publishable key without
+        ``currency`` gets each family's default-currency plans. A family plan carries ``family``
+        and ``prices`` (every variant)."""
         require_catalog_key(self.api_key)
         query = {"currency": currency, "external_customer_id": external_customer_id}
         params = {key: value for key, value in query.items() if value}

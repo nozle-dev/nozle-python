@@ -95,8 +95,10 @@ plan_code)`. Both checkout and subscription creation require an `sk_` key.
 #### Currencies
 
 A plan family can be sold in several currencies, one plan per interval and currency.
-`plans(currency="EUR")` lists family plans in that currency, `plans(external_customer_id=...)`
-in the customer's locked currency, and without either each family shows its default currency.
+With a secret key, `plans()` lists every plan in every currency; `plans(currency="EUR")` lists
+only that currency, and `plans(external_customer_id=...)` only the customer's locked currency
+(ignored when your organization allows several currencies per customer). A publishable key
+without `currency` gets each family's default-currency plans.
 A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every
 variant: `currency`, `interval`, `plan_code`, `amount_cents`).
 
