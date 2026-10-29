@@ -128,7 +128,10 @@ def test_track_errors_carry_the_transaction_id_for_a_safe_retry(
         ],
     )
     client = Nozle(
-        "sk_test", base_url="https://api.example/engine", events_url="https://api.example/core"
+        "sk_test",
+        base_url="https://api.example/engine",
+        events_url="https://api.example/core",
+        max_retries=0,
     )
 
     with pytest.raises(NozleAPIError) as api_error:
@@ -908,7 +911,7 @@ def test_retry_after_accepts_a_date_and_ignores_a_bad_value(
             {"status_code": 429, "json": {}},
         ],
     )
-    client = Nozle("sk_test", base_url="https://api.example/engine")
+    client = Nozle("sk_test", base_url="https://api.example/engine", max_retries=0)
     with pytest.raises(NozleAPIError) as dated:
         client.plans()
     assert 0 < dated.value.retry_after <= 20
@@ -926,11 +929,22 @@ def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> list:
     return waits
 
 
-def test_retries_are_off_by_default(requests_mock: requests_mock.Mocker) -> None:
-    matcher = requests_mock.get("https://api.example/engine/api/v1/plans", status_code=503, json={})
+def test_default_is_two_retries_for_safe_calls_and_zero_disables(
+    requests_mock: requests_mock.Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _no_sleep(monkeypatch)
+    base = "https://api.example/engine"
+    reads = requests_mock.get(f"{base}/api/v1/plans", status_code=503, json={})
+    writes = requests_mock.post(f"{base}/api/v1/subscribe", status_code=503, json={})
     with pytest.raises(NozleAPIError):
-        Nozle("sk_test", base_url="https://api.example/engine").plans()
-    assert matcher.call_count == 1
+        Nozle("sk_test", base_url=base).plans()
+    assert reads.call_count == 3
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test", base_url=base).subscribe("cust", "pro")
+    assert writes.call_count == 1
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test", base_url=base, max_retries=0).plans()
+    assert reads.call_count == 4
 
 
 def test_a_read_is_retried_after_503_429_and_a_network_error(

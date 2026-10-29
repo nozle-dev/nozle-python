@@ -36,7 +36,7 @@ nozle = Nozle(timeout=15)  # reads NOZLE_SECRET_KEY; host defaults to https://ap
 `AsyncNozle` has the same constructor options, namespaces and methods as `Nozle`; each
 call that reaches the API is awaited. It sends requests with `httpx.AsyncClient`, so
 install the `httpx` extra. Validation, errors (`NozleAPIError` with `request_id` and
-`retry_after`), opt-in retries and idempotency rules are the same; retries wait with
+`retry_after`), retries (2 by default, `max_retries=0` disables) and idempotency rules are the same; retries wait with
 `asyncio.sleep`, so they never block the event loop.
 
 ```bash
@@ -342,7 +342,9 @@ consumption = nozle.usage.track(
 )
 ```
 
-The SDK does not automatically retry mutation requests. Retry only with the same
+The SDK retries up to 2 times by default (`max_retries=0` disables), and only calls that are safe to
+repeat: reads, and calls with an idempotency key or that are idempotent by id. It never retries other
+mutation requests. Retry only with the same
 idempotency key after deciding the failure is safe to retry.
 
 ## Existing operations

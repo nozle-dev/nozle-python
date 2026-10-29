@@ -33,7 +33,7 @@ _SENSITIVE_KEYS = {
 class BaseTransport(Generic[M]):
     """What the sync and async transports share: headers, retry policy and error mapping.
 
-    It never retries unless ``max_retries`` is set.
+    It retries up to ``max_retries`` times (the clients default to 2; 0 disables).
     """
 
     def __init__(
@@ -41,7 +41,7 @@ class BaseTransport(Generic[M]):
         base_url: str,
         api_key: str,
         timeout: float,
-        max_retries: int = 0,
+        max_retries: int = 2,
         retry_delay: float = 0.5,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -147,7 +147,7 @@ class HttpTransport(BaseTransport[Sync]):
         api_key: str,
         timeout: float,
         session: Optional[requests.Session] = None,
-        max_retries: int = 0,
+        max_retries: int = 2,
         retry_delay: float = 0.5,
     ) -> None:
         super().__init__(base_url, api_key, timeout, max_retries, retry_delay)
@@ -209,7 +209,7 @@ class AsyncHttpTransport(BaseTransport[Async]):
         api_key: str,
         timeout: float,
         client: httpx.AsyncClient,
-        max_retries: int = 0,
+        max_retries: int = 2,
         retry_delay: float = 0.5,
     ) -> None:
         super().__init__(base_url, api_key, timeout, max_retries, retry_delay)

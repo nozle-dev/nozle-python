@@ -962,7 +962,7 @@ class Nozle(_BaseNozle[Sync]):
         timeout: float = 10,
         *,
         host: str = "https://api.nozle.app",
-        max_retries: int = 0,
+        max_retries: int = 2,
         retry_delay: float = 0.5,
         _session: Optional[requests.Session] = None,
     ) -> None:
@@ -1021,7 +1021,7 @@ class AsyncNozle(_BaseNozle[Async]):
         timeout: float = 10,
         *,
         host: str = "https://api.nozle.app",
-        max_retries: int = 0,
+        max_retries: int = 2,
         retry_delay: float = 0.5,
         _client: Optional[httpx.AsyncClient] = None,
     ) -> None:
