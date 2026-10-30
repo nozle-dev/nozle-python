@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.23.0 — 2026-10-30
+
+### Breaking
+
+- `webhooks.verify(body, headers, *, webhook_secret, tolerance_seconds=300)` verifies the Standard Webhooks signature (`webhook-id`, `webhook-timestamp`, `webhook-signature`) and is the only scheme. `webhook_secret` is the endpoint's `whsec_` secret, or a list of them while rotating; a timestamp more than `tolerance_seconds` from now fails. It makes no request (still awaited on `AsyncNozle`). The `hmac_key` option, `X-Nozle-Signature*` headers and the public-key read are removed. `WebhookVerificationError.code` is `missing_signature`, `missing_webhook_secret`, `invalid_signature` or `invalid_payload`; `NozleWebhookEvent.id` is `webhook-id`.
+
 ## 0.22.0 — 2026-10-29
 
 ### Changed

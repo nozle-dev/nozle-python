@@ -54,8 +54,8 @@ async with AsyncNozle(max_retries=2) as nozle:  # reads NOZLE_SECRET_KEY
 
 Without `async with`, call `await nozle.aclose()` when you are done. `nozle.events.create_transaction_id()`
 and `nozle.cost_events.create_cost_event_id()` make no request and are not awaited.
-`await nozle.webhooks.verify(body, headers)` is awaited because a `jwt` endpoint reads
-Nozle's public key once. `nozle.capture_async_http_client(...)` and
+`await nozle.webhooks.verify(body, headers, webhook_secret=...)` is awaited like every other call
+(it makes no request). `nozle.capture_async_http_client(...)` and
 `nozle.wrap_http_client(httpx.AsyncClient(...))` record LLM usage through the same event
 loop; `AsyncNozle` does not wrap a synchronous `httpx.Client`, use `Nozle` there.
 
@@ -63,6 +63,19 @@ loop; `AsyncNozle` does not wrap a synchronous `httpx.Client`, use `Nozle` there
 
 The client exposes `events`, `cost_events`, `customers`, `credit_systems`, `credits`,
 `entities`, `usage`, and `margin`.
+
+### Webhooks
+
+```python
+try:
+    event = nozle.webhooks.verify(raw_body, request_headers, webhook_secret="whsec_...")
+except nozle.WebhookVerificationError:
+    ...  # answer 400
+```
+
+Pass the body exactly as received. `webhook_secret` is the
+endpoint's `whsec_` secret; pass a list of secrets while one is being rotated. A
+`webhook-timestamp` more than 300 s from now fails (`tolerance_seconds=` changes that).
 
 ### Plans and checkout
 

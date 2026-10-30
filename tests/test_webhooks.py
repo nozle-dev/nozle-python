@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 from pathlib import Path
 
@@ -8,94 +10,110 @@ import pytest
 import requests_mock
 
 from nozle import Nozle, WebhookVerificationError
-from nozle.webhooks import _rsa_public_key
+from nozle.webhooks import _standard_matches
 
-# Signed with throwaway RSA keys; the private keys are not kept.
 V = json.loads((Path(__file__).parent / "fixtures" / "webhook_vectors.json").read_text())
 BODY = V["body"]
-KEY_URL = "https://api.example/core/api/v1/webhooks/json_public_key"
-
-
-def headers(signature: str, algorithm: str) -> dict:
-    return {
-        "X-Nozle-Signature": signature,
-        "X-Nozle-Signature-Algorithm": algorithm,
-        "X-Nozle-Unique-Key": "wh_1",
-    }
 
 
 def client() -> Nozle:
     return Nozle("sk_test", host="https://api.example")
 
 
-def test_hmac_signature_returns_the_event() -> None:
-    event = client().webhooks.verify(
-        BODY.encode(), headers(V["hmac_signature"], "hmac"), hmac_key=V["hmac_key"]
+S = V["standard"]
+NOW = int(S["timestamp"])
+
+
+def _sign(secret: str, webhook_id: str, timestamp: int, body: str) -> str:
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    mac = hmac.new(key, f"{webhook_id}.{timestamp}.{body}".encode(), hashlib.sha256).digest()
+    return "v1," + base64.b64encode(mac).decode()
+
+
+def _standard(signature: str, timestamp: int = NOW) -> dict:
+    return {
+        "webhook-id": S["webhook_id"],
+        "webhook-timestamp": str(timestamp),
+        "webhook-signature": signature,
+    }
+
+
+@pytest.fixture
+def at_vector_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("nozle.webhooks.time.time", lambda: NOW)
+
+
+def test_published_vector() -> None:
+    assert _sign(S["secret"], S["webhook_id"], NOW, S["body"]) == S["signature"]
+    assert _standard_matches(
+        S["body"].encode(), S["webhook_id"], S["timestamp"], S["signature"], [S["secret"]]
     )
-    assert event.id == "wh_1"
+
+
+@pytest.mark.usefixtures("at_vector_time")
+def test_returns_the_event_without_a_request(requests_mock: requests_mock.Mocker) -> None:
+    signature = _sign(S["secret"], S["webhook_id"], NOW, BODY)
+    event = client().webhooks.verify(BODY, _standard(signature), webhook_secret=S["secret"])
+    assert event.id == S["webhook_id"]
     assert event.type == "subscription.started"
-    assert event.object_type == "subscription"
-    assert event.organization_id == "org_1"
-    assert event.object == {"external_id": "sub_1", "plan_code": "pro"}
+    assert requests_mock.call_count == 0
 
 
+@pytest.mark.usefixtures("at_vector_time")
+def test_accepts_rotation_and_ignores_other_versions() -> None:
+    old, new = S["secret"], "whsec_" + base64.b64encode(b"x" * 24).decode()
+    good = _sign(old, S["webhook_id"], NOW, BODY)
+    other = _sign(new, S["webhook_id"], NOW, BODY)
+    wrong = _sign("whsec_" + base64.b64encode(b"y" * 24).decode(), S["webhook_id"], NOW, BODY)
+    verify = client().webhooks.verify
+    assert verify(BODY, _standard(f"{wrong} {good}"), webhook_secret=old)
+    assert verify(BODY, _standard(other), webhook_secret=[old, new])
+    assert verify(BODY, _standard(f"v2,{wrong[3:]} {good}"), webhook_secret=old)
+    with pytest.raises(WebhookVerificationError):
+        verify(BODY, _standard("v2," + good[3:]), webhook_secret=old)
+
+
+@pytest.mark.usefixtures("at_vector_time")
 @pytest.mark.parametrize(
-    ("body", "key", "code"),
-    [
-        (BODY.replace("pro", "max"), "org-hmac-key", "invalid_signature"),
-        (BODY, "other-key", "invalid_signature"),
-        (BODY, None, "missing_hmac_key"),
-    ],
+    ("offset", "ok"), [(299, True), (-299, True), (300, True), (301, False), (-301, False)]
 )
-def test_hmac_rejections(body: str, key: str | None, code: str) -> None:
-    with pytest.raises(WebhookVerificationError) as error:
-        client().webhooks.verify(body, headers(V["hmac_signature"], "hmac"), hmac_key=key)
-    assert error.value.code == code
-
-
-def test_missing_headers_and_unknown_algorithm() -> None:
-    with pytest.raises(WebhookVerificationError) as error:
-        client().webhooks.verify(BODY, {})
-    assert error.value.code == "missing_signature"
-    with pytest.raises(WebhookVerificationError) as error:
-        client().webhooks.verify(BODY, headers("x", "md5"))
-    assert error.value.code == "unsupported_algorithm"
-
-
-def test_jwt_reads_the_key_once_with_the_secret_key(requests_mock: requests_mock.Mocker) -> None:
-    route = requests_mock.get(KEY_URL, json={"webhook": {"public_key": V["public_key_spki_b64"]}})
-    nozle = client()
-    nozle.webhooks.verify(BODY, headers(V["jwt_valid"], "jwt"))
-    nozle.webhooks.verify(
-        BODY.encode(), {k.lower(): v for k, v in headers(V["jwt_valid"], "jwt").items()}
+def test_tolerance(offset: int, ok: bool) -> None:
+    stamp = NOW - offset
+    signature = _sign(S["secret"], S["webhook_id"], stamp, BODY)
+    call = lambda: client().webhooks.verify(  # noqa: E731
+        BODY, _standard(signature, stamp), webhook_secret=S["secret"]
     )
-    assert route.call_count == 1
-    assert route.last_request.headers["Authorization"] == "Bearer sk_test"
+    if ok:
+        assert call()
+    else:
+        with pytest.raises(WebhookVerificationError) as error:
+            call()
+        assert error.value.code == "invalid_signature"
 
 
-@pytest.mark.parametrize("token", ["jwt_other_body", "jwt_other_key", "jwt_hs256_header"])
-def test_jwt_rejections(requests_mock: requests_mock.Mocker, token: str) -> None:
-    requests_mock.get(KEY_URL, json={"webhook": {"public_key": V["public_key_spki_b64"]}})
-    with pytest.raises(WebhookVerificationError) as error:
-        client().webhooks.verify(BODY, headers(V[token], "jwt"))
-    assert error.value.code == "invalid_signature"
-
-
-def test_jwt_reads_the_key_again_after_a_rotation(requests_mock: requests_mock.Mocker) -> None:
-    route = requests_mock.get(
-        KEY_URL,
-        [
-            {"json": {"webhook": {"public_key": V["rotated_public_key_spki_b64"]}}},
-            {"json": {"webhook": {"public_key": V["public_key_spki_b64"]}}},
-        ],
-    )
-    client().webhooks.verify(BODY, headers(V["jwt_valid"], "jwt"))
-    assert route.call_count == 2
-
-
-def test_pkcs1_and_spki_keys_parse_to_the_same_numbers() -> None:
-    spki = base64.b64decode(V["public_key_spki_b64"]).decode()
-    pkcs1 = base64.b64decode(V["public_key_pkcs1_b64"]).decode()
-    n, e = _rsa_public_key(spki)
-    assert (n, e) == _rsa_public_key(pkcs1)
-    assert e == 65537 and n.bit_length() == 2048
+@pytest.mark.usefixtures("at_vector_time")
+def test_rejections() -> None:
+    good = _sign(S["secret"], S["webhook_id"], NOW, BODY)
+    other = "whsec_" + base64.b64encode(b"y" * 24).decode()
+    cases = [
+        (BODY, _standard(good), other, "invalid_signature"),
+        (BODY.replace("pro", "max"), _standard(good), S["secret"], "invalid_signature"),
+        (BODY, {**_standard(good), "webhook-timestamp": "abc"}, S["secret"], "invalid_signature"),
+        (
+            BODY,
+            {k: v for k, v in _standard(good).items() if k != "webhook-id"},
+            S["secret"],
+            "missing_signature",
+        ),
+        (
+            BODY,
+            {k: v for k, v in _standard(good).items() if k != "webhook-signature"},
+            S["secret"],
+            "missing_signature",
+        ),
+        (BODY, _standard(good), [], "missing_webhook_secret"),
+    ]
+    for body, sent, secret, code in cases:
+        with pytest.raises(WebhookVerificationError) as error:
+            client().webhooks.verify(body, sent, webhook_secret=secret)
+        assert error.value.code == code
