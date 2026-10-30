@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.22.0 — 2026-10-29
+
+### Changed
+
+- `Nozle` and `AsyncNozle` retry up to 2 times by default (`max_retries` was 0), for network errors, timeouts, 429 and 5xx on calls that are safe to repeat only (reads, calls with an `Idempotency-Key`, idempotent-by-id calls). Other mutations are never retried. `max_retries=0` disables retries.
+
 ## 0.21.0 — 2026-10-29
 
 Needs Core 11.10.0 (one plan family sold in several currencies).

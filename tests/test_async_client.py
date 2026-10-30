@@ -276,7 +276,7 @@ async def test_reads_retry_with_asyncio_sleep(monkeypatch: pytest.MonkeyPatch) -
     assert not answers and len(waits) == 3 and waits[1] == 2.0
 
 
-async def test_writes_retry_only_when_safe_and_retries_are_off_by_default(
+async def test_writes_retry_only_when_safe_and_zero_disables_and_two_is_the_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _no_sleep(monkeypatch)
@@ -288,14 +288,18 @@ async def test_writes_retry_only_when_safe_and_retries_are_off_by_default(
 
     with pytest.raises(NozleAPIError):
         await async_client(handler).plans()
-    nozle = async_client(handler, max_retries=2)
+    with pytest.raises(NozleAPIError):
+        await async_client(handler, max_retries=0).plans()
+    nozle = async_client(handler)
     with pytest.raises(NozleAPIError):
         await nozle.subscribe("cust", "pro")
     with pytest.raises(NozleAPIError):
         await nozle.usage.track("cust", "f", idempotency_key="k", timestamp=STAMP)
     assert (
         calls
-        == ["/engine/api/v1/plans", "/engine/api/v1/subscribe"] + ["/engine/api/v1/usage/track"] * 3
+        == ["/engine/api/v1/plans"] * 3
+        + ["/engine/api/v1/plans", "/engine/api/v1/subscribe"]
+        + ["/engine/api/v1/usage/track"] * 3
     )
 
 
@@ -347,7 +351,7 @@ async def test_track_errors_carry_the_transaction_id_for_a_safe_retry() -> None:
             raise httpx.ReadTimeout("timed out", request=request)
         return httpx.Response(200, text="accepted")
 
-    nozle = async_client(handler)
+    nozle = async_client(handler, max_retries=0)
     with pytest.raises(NozleAPIError) as api_error:
         await nozle.track("cust", "api_calls", subscription_id="sub_1")
     generated = api_error.value.transaction_id
@@ -449,7 +453,7 @@ async def test_record_usage_is_awaited_and_raises_the_first_delivery_error() -> 
         status = 500 if request.url.path.endswith("/cost-events") else 200
         return httpx.Response(status, json=UNIVERSAL)
 
-    nozle = async_client(handler)
+    nozle = async_client(handler, max_retries=0)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         await nozle.record_usage("cust", model="m", input_tokens=4, output_tokens=2)
