@@ -7,17 +7,16 @@ import binascii
 import hashlib
 import hmac
 import json
+import time
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from nozle._operation import M, Resource, Steps, endpoint
-from nozle._transport import BaseTransport
-from nozle._validation import require_secret_key
 
 
 @dataclass(frozen=True)
 class NozleWebhookEvent:
-    """A verified webhook. ``id`` is ``X-Nozle-Unique-Key``: use it to skip duplicates."""
+    """A verified webhook. ``id`` is ``webhook-id``: use it to skip duplicates."""
 
     id: str
     type: str
@@ -30,8 +29,8 @@ class NozleWebhookEvent:
 class WebhookVerificationError(Exception):
     """The request is not a genuine Nozle webhook. Answer it with 400 and do not act on it.
 
-    ``code`` is ``missing_signature``, ``unsupported_algorithm``, ``missing_hmac_key``,
-    ``invalid_signature`` or ``invalid_payload``.
+    ``code`` is ``missing_signature``, ``missing_secret``, ``invalid_timestamp``,
+    ``invalid_signature`` or ``invalid_payload``, the same codes as the Node and Go SDKs.
     """
 
     def __init__(self, code: str, message: str) -> None:
@@ -40,9 +39,6 @@ class WebhookVerificationError(Exception):
 
 
 Headers = Mapping[str, Any]
-
-# DER prefix of the SHA-256 DigestInfo in an RSASSA-PKCS1-v1_5 signature (RFC 8017, section 9.2).
-_SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
 
 
 def _header(headers: Headers, name: str) -> Optional[str]:
@@ -55,75 +51,30 @@ def _header(headers: Headers, name: str) -> Optional[str]:
     return None
 
 
-def _b64url(value: str) -> bytes:
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
-
-
-def _der(data: bytes, offset: int) -> Tuple[int, bytes, int]:
-    """Reads one DER element at ``offset``: its tag, contents and the offset after it."""
-    tag = data[offset]
-    length = data[offset + 1]
-    offset += 2
-    if length & 0x80:
-        count = length & 0x7F
-        length = int.from_bytes(data[offset : offset + count], "big")
-        offset += count
-    return tag, data[offset : offset + length], offset + length
-
-
-def _rsa_public_key(pem: str) -> Tuple[int, int]:
-    """(n, e) from a PEM ``PUBLIC KEY`` (SubjectPublicKeyInfo) or ``RSA PUBLIC KEY`` (PKCS#1)."""
-    lines = [line.strip() for line in pem.strip().splitlines()]
-    der = base64.b64decode("".join(line for line in lines if line and not line.startswith("-----")))
-    _, outer, _ = _der(der, 0)
-    if lines[0] == "-----BEGIN PUBLIC KEY-----":
-        _, _, after_algorithm = _der(outer, 0)
-        _, bit_string, _ = _der(outer, after_algorithm)
-        _, outer, _ = _der(bit_string[1:], 0)
-    _, n, after_n = _der(outer, 0)
-    _, e, _ = _der(outer, after_n)
-    return int.from_bytes(n, "big"), int.from_bytes(e, "big")
-
-
-def _rs256_valid(signed: bytes, signature: bytes, key: Tuple[int, int]) -> bool:
-    # Rebuild the one valid PKCS#1 v1.5 encoding and compare it whole, instead of parsing the
-    # decrypted signature.
-    n, e = key
-    size = (n.bit_length() + 7) // 8
-    if len(signature) != size:
-        return False
-    value = int.from_bytes(signature, "big")
-    if value >= n:
-        return False
-    encoded = pow(value, e, n).to_bytes(size, "big")
-    digest = _SHA256_DIGEST_INFO + hashlib.sha256(signed).digest()
-    expected = b"\x00\x01" + b"\xff" * (size - len(digest) - 3) + b"\x00" + digest
-    return hmac.compare_digest(encoded, expected)
-
-
-def _jwt_matches(body: bytes, token: str, key: Tuple[int, int]) -> bool:
-    parts = token.split(".")
-    if len(parts) != 3:
-        return False
-    try:
-        head = json.loads(_b64url(parts[0]))
-        if head.get("alg") != "RS256":
-            return False
-        if not _rs256_valid(f"{parts[0]}.{parts[1]}".encode(), _b64url(parts[2]), key):
-            return False
-        data = json.loads(_b64url(parts[1])).get("data")
-    except (ValueError, binascii.Error, AttributeError):
-        return False
-    return isinstance(data, str) and hmac.compare_digest(data.encode("utf-8"), body)
-
-
-def _hmac_matches(body: bytes, signature: str, key: str) -> bool:
-    expected = hmac.new(key.encode("utf-8"), body, hashlib.sha256).digest()
-    try:
-        received = base64.b64decode(signature, validate=True)
-    except (ValueError, binascii.Error):
-        return False
-    return hmac.compare_digest(received, expected)
+def _standard_matches(
+    body: bytes, webhook_id: str, timestamp: str, signatures: str, secrets: Sequence[str]
+) -> bool:
+    """Standard Webhooks: any ``v1,`` entry may match any secret. Other versions are ignored."""
+    signed = webhook_id.encode("utf-8") + b"." + timestamp.encode("utf-8") + b"." + body
+    candidates = []
+    for entry in signatures.split():
+        version, _, value = entry.partition(",")
+        if version != "v1":
+            continue
+        try:
+            candidates.append(base64.b64decode(value, validate=True))
+        except (ValueError, binascii.Error):
+            continue
+    matched = False
+    for secret in secrets:
+        try:
+            key = base64.b64decode(secret.removeprefix("whsec_"))
+        except (ValueError, binascii.Error):
+            continue
+        expected = hmac.new(key, signed, hashlib.sha256).digest()
+        for received in candidates:  # no early exit: constant work per secret and signature
+            matched |= hmac.compare_digest(received, expected)
+    return matched
 
 
 def _event(body: bytes, event_id: str) -> NozleWebhookEvent:
@@ -149,69 +100,48 @@ def _event(body: bytes, event_id: str) -> NozleWebhookEvent:
 class WebhooksNamespace(Resource[M]):
     """Verifies webhooks Nozle sends to your endpoint."""
 
-    def __init__(self, transport: BaseTransport[M], api_key: str) -> None:
-        super().__init__(transport, api_key)
-        self._public_key: Optional[Tuple[int, int]] = None
-
     @endpoint
     def verify(
         self,
         body: Union[bytes, str],
         headers: Headers,
         *,
-        hmac_key: Optional[str] = None,
+        webhook_secret: Union[str, Sequence[str]],
+        tolerance_seconds: int = 300,
     ) -> Steps[NozleWebhookEvent]:
-        """Checks ``X-Nozle-Signature`` against the raw body and returns the event.
+        """Checks ``webhook-signature`` against the raw body and returns the event.
 
-        Pass the body exactly as received; parsed and re-serialised JSON fails the check. ``hmac``
-        endpoints need the organization's ``hmac_key``. ``jwt`` endpoints need nothing: the public
-        key is read once from Core with your secret key and cached, so on ``AsyncNozle`` this
-        method is awaited. Raises
-        ``WebhookVerificationError`` when the request is not genuine.
+        Pass the body exactly as received; parsed and re-serialised JSON fails the check.
+        ``webhook_secret`` is the endpoint's ``whsec_`` secret; pass a list while one is being
+        rotated. A ``webhook-timestamp`` more than ``tolerance_seconds`` from now fails. No request
+        is made; on ``AsyncNozle`` the call is still awaited. Raises ``WebhookVerificationError``
+        when the request is not genuine.
         """
-        signature = _header(headers, "x-nozle-signature")
-        algorithm = _header(headers, "x-nozle-signature-algorithm")
-        event_id = _header(headers, "x-nozle-unique-key") or ""
-        if not signature or not algorithm:
-            raise WebhookVerificationError(
-                "missing_signature", "X-Nozle-Signature headers are missing"
-            )
         raw = body.encode("utf-8") if isinstance(body, str) else bytes(body)
-
-        if algorithm == "hmac":
-            if not hmac_key:
-                raise WebhookVerificationError(
-                    "missing_hmac_key", "hmac webhooks need the organization's hmac_key"
-                )
-            if not _hmac_matches(raw, signature, hmac_key):
-                raise WebhookVerificationError(
-                    "invalid_signature", "webhook signature does not match"
-                )
-        elif algorithm == "jwt":
-            valid = _jwt_matches(raw, signature, (yield from self._key()))
-            if not valid:
-                # The key may have been rotated since it was cached: read it again once.
-                valid = _jwt_matches(raw, signature, (yield from self._key(refresh=True)))
-            if not valid:
-                raise WebhookVerificationError(
-                    "invalid_signature", "webhook signature does not match"
-                )
-        else:
+        webhook_id = _header(headers, "webhook-id")
+        timestamp = _header(headers, "webhook-timestamp")
+        signatures = _header(headers, "webhook-signature")
+        if not webhook_id or not timestamp or not signatures:
             raise WebhookVerificationError(
-                "unsupported_algorithm", f"unsupported signature algorithm {algorithm}"
+                "missing_signature", "webhook-* signature headers are missing"
             )
-        return _event(raw, event_id)
-
-    def _key(self, refresh: bool = False) -> Steps[Tuple[int, int]]:
-        # No lock: a lock held across the request would block the event loop on AsyncNozle.
-        # Two first calls at once may both read the key; each stores the same value.
-        key = self._public_key
-        if refresh or key is None:
-            require_secret_key(self._api_key, "webhooks.verify")
-            response = yield self._transport.call(
-                "webhooks.public_key", "GET", "/api/v1/webhooks/json_public_key"
+        secrets = [webhook_secret] if isinstance(webhook_secret, str) else list(webhook_secret)
+        secrets = [secret for secret in secrets if secret]
+        if not secrets:
+            raise WebhookVerificationError(
+                "missing_secret", "webhooks need the endpoint's whsec_ secret"
             )
-            encoded = ((response or {}).get("webhook") or {}).get("public_key") or ""
-            key = _rsa_public_key(base64.b64decode(encoded).decode("utf-8"))
-            self._public_key = key
-        return key
+        try:
+            age = abs(time.time() - int(timestamp))
+        except ValueError:
+            raise WebhookVerificationError(
+                "invalid_timestamp", "webhook-timestamp is not a Unix timestamp"
+            ) from None
+        if age > tolerance_seconds:
+            raise WebhookVerificationError(
+                "invalid_timestamp", "webhook-timestamp is outside the tolerance"
+            )
+        if not _standard_matches(raw, webhook_id, timestamp, signatures, secrets):
+            raise WebhookVerificationError("invalid_signature", "webhook signature does not match")
+        return _event(raw, webhook_id)
+        yield  # makes this an operation, so AsyncNozle awaits it like every other call

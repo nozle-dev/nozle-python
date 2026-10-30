@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import warnings
 from pathlib import Path
@@ -393,28 +396,30 @@ async def test_context_manager_closes_only_its_own_client() -> None:
 V = json.loads((Path(__file__).parent / "fixtures" / "webhook_vectors.json").read_text())
 
 
-async def test_webhook_verify_reads_the_jwt_key_once_and_hmac_needs_no_request() -> None:
-    reads: List[str] = []
-
+async def test_webhook_verify_is_awaited_and_makes_no_request() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        reads.append(request.headers["authorization"])
-        return httpx.Response(200, json={"webhook": {"public_key": V["public_key_spki_b64"]}})
+        raise AssertionError("verify made a request")
 
-    nozle = async_client(handler)
+    stamp = 1614265330
+    secret = V["standard"]["secret"]
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    mac = hmac.new(key, f"wh_1.{stamp}.{V['body']}".encode(), hashlib.sha256).digest()
     headers = {
-        "X-Nozle-Signature": V["jwt_valid"],
-        "X-Nozle-Signature-Algorithm": "jwt",
-        "X-Nozle-Unique-Key": "wh_1",
+        "webhook-id": "wh_1",
+        "webhook-timestamp": str(stamp),
+        "webhook-signature": "v1," + base64.b64encode(mac).decode(),
     }
-    assert (await nozle.webhooks.verify(V["body"], headers)).id == "wh_1"
-    await nozle.webhooks.verify(V["body"], headers)
-    assert reads == ["Bearer sk_test"]
-    hmac_headers = {**headers, "X-Nozle-Signature": V["hmac_signature"]}
-    hmac_headers["X-Nozle-Signature-Algorithm"] = "hmac"
-    event = await nozle.webhooks.verify(V["body"], hmac_headers, hmac_key=V["hmac_key"])
-    assert event.type == "subscription.started"
+    event = await async_client(handler).webhooks.verify(
+        V["body"], headers, webhook_secret=secret, tolerance_seconds=10**9
+    )
+    assert event.id == "wh_1"
     with pytest.raises(WebhookVerificationError):
-        await nozle.webhooks.verify(V["body"], {**headers, "X-Nozle-Signature": "x.y.z"})
+        await async_client(handler).webhooks.verify(
+            V["body"],
+            headers,
+            webhook_secret="whsec_" + base64.b64encode(b"z" * 24).decode(),
+            tolerance_seconds=10**9,
+        )
 
 
 async def test_capture_records_llm_usage_through_async_nozle() -> None:
