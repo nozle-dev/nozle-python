@@ -29,8 +29,8 @@ class NozleWebhookEvent:
 class WebhookVerificationError(Exception):
     """The request is not a genuine Nozle webhook. Answer it with 400 and do not act on it.
 
-    ``code`` is ``missing_signature``, ``missing_webhook_secret``, ``invalid_signature`` or
-    ``invalid_payload``.
+    ``code`` is ``missing_signature``, ``missing_secret``, ``invalid_timestamp``,
+    ``invalid_signature`` or ``invalid_payload``, the same codes as the Node and Go SDKs.
     """
 
     def __init__(self, code: str, message: str) -> None:
@@ -129,15 +129,17 @@ class WebhooksNamespace(Resource[M]):
         secrets = [secret for secret in secrets if secret]
         if not secrets:
             raise WebhookVerificationError(
-                "missing_webhook_secret", "webhooks need the endpoint's whsec_ secret"
+                "missing_secret", "webhooks need the endpoint's whsec_ secret"
             )
         try:
             age = abs(time.time() - int(timestamp))
         except ValueError:
-            age = None
-        if age is None or age > tolerance_seconds:
             raise WebhookVerificationError(
-                "invalid_signature", "webhook timestamp is not acceptable"
+                "invalid_timestamp", "webhook-timestamp is not a Unix timestamp"
+            ) from None
+        if age > tolerance_seconds:
+            raise WebhookVerificationError(
+                "invalid_timestamp", "webhook-timestamp is outside the tolerance"
             )
         if not _standard_matches(raw, webhook_id, timestamp, signatures, secrets):
             raise WebhookVerificationError("invalid_signature", "webhook signature does not match")

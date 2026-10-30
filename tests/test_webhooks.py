@@ -88,7 +88,7 @@ def test_tolerance(offset: int, ok: bool) -> None:
     else:
         with pytest.raises(WebhookVerificationError) as error:
             call()
-        assert error.value.code == "invalid_signature"
+        assert error.value.code == "invalid_timestamp"
 
 
 @pytest.mark.usefixtures("at_vector_time")
@@ -98,7 +98,7 @@ def test_rejections() -> None:
     cases = [
         (BODY, _standard(good), other, "invalid_signature"),
         (BODY.replace("pro", "max"), _standard(good), S["secret"], "invalid_signature"),
-        (BODY, {**_standard(good), "webhook-timestamp": "abc"}, S["secret"], "invalid_signature"),
+        (BODY, {**_standard(good), "webhook-timestamp": "abc"}, S["secret"], "invalid_timestamp"),
         (
             BODY,
             {k: v for k, v in _standard(good).items() if k != "webhook-id"},
@@ -111,7 +111,7 @@ def test_rejections() -> None:
             S["secret"],
             "missing_signature",
         ),
-        (BODY, _standard(good), [], "missing_webhook_secret"),
+        (BODY, _standard(good), [], "missing_secret"),
     ]
     for body, sent, secret, code in cases:
         with pytest.raises(WebhookVerificationError) as error:
