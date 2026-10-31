@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.25.0 — 2026-10-31
+
+### Added
+
+- `credit_notes` on `Nozle` and `AsyncNozle`: `preview()` (Core `POST /credit_notes/estimate`), `create()` with `credit_amount_cents`, `refund_amount_cents`, `offset_amount_cents`, `reason`, `description` and `metadata`, `refund()` (preview, then a credit note refunded to the original payment method; `credit_remainder` for partial payment), `list()`, `get()` and `void()`. Typed `CreditNote`, `CreditNotePreview`, `CreditNotePage`, `CreditNoteItem`, `CreditNoteReason`, and the error-code constants (`REFUND_EXCEEDS_PAID_AMOUNT`, `HIGHER_THAN_REMAINING_INVOICE_AMOUNT`, ...). `create()`, `refund()` and `void()` are never retried because they send no `Idempotency-Key` yet; `preview()`, `get()` and `list()` follow `max_retries`. Needs a secret key and a workspace with credit notes enabled.
+
 ## 0.24.0 — 2026-10-31
 
 ### Added

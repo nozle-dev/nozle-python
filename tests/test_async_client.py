@@ -40,6 +40,12 @@ UNIVERSAL: Dict[str, Any] = {
     "credit_systems": [],
     "meta": {},
     "invoice": {"nozle_id": "inv_1", "file_url": "https://files.example/inv.pdf"},
+    "credit_note": {"nozle_id": "cn_1"},
+    "credit_notes": [],
+    "estimated_credit_note": {
+        "max_creditable_amount_cents": 500,
+        "max_refundable_amount_cents": 500,
+    },
     "alert": {"code": "a1"},
     "manage_payment_method": {
         "url": "https://billing.stripe.com/x",
@@ -82,6 +88,7 @@ def async_client(handler: Callable[[httpx.Request], httpx.Response], **options: 
 ITEMS = [{"external_entity_id": "user-42", "plan_code": "pro"}]
 TRANSITION = {"customer_id": "cust", "subscription_id": "sub_1", "operation": "uncancel"}
 STAMP = "2026-10-15T10:00:00Z"
+CN_ITEMS = [{"fee_id": "fee_1", "amount_cents": 500}]
 CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.track("cust", "api_calls", {"tokens": 1}, transaction_id="t1", timestamp=STAMP),
     lambda n: n.track_batch(
@@ -127,6 +134,12 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.invoices.list("cust", payment_overdue=True, per_page=5),
     lambda n: n.invoices.get("inv_1"),
     lambda n: n.invoices.download_url("inv_1"),
+    lambda n: n.credit_notes.preview("inv_1", CN_ITEMS),
+    lambda n: n.credit_notes.create("inv_1", CN_ITEMS, refund_amount_cents=500, reason="other"),
+    lambda n: n.credit_notes.refund("inv_1", CN_ITEMS, metadata={"ticket": "T-1"}),
+    lambda n: n.credit_notes.list(customer_id="cust", refund_status="failed", per_page=5),
+    lambda n: n.credit_notes.get("cn_1"),
+    lambda n: n.credit_notes.void("cn_1"),
     lambda n: n.alerts.list(subscription_id="sub_1"),
     lambda n: n.alerts.get("a1", customer_id="cust", wallet_code="w"),
     lambda n: n.alerts.create("usage_amount", "a1", [{"value": 10}], subscription_id="sub_1"),

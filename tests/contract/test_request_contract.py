@@ -122,6 +122,18 @@ CALLS: list[Callable[[Nozle], Any]] = [
         "cust", "user-42", credit_system_code="ai_credits", amount="10", idempotency_key="a1"
     ),
     lambda n: n.margin.simulate("agent_execution", 1),
+    lambda n: n.credit_notes.preview("inv_1", [{"fee_id": "fee_1", "amount_cents": 500}]),
+    lambda n: n.credit_notes.create(
+        "inv_1",
+        [{"fee_id": "fee_1", "amount_cents": 500}],
+        refund_amount_cents=500,
+        credit_amount_cents=0,
+        offset_amount_cents=0,
+        reason="duplicated_charge",
+        description="Charged twice",
+        metadata={"ticket": "T-1"},
+    ),
+    lambda n: n.credit_notes.void("cn_1"),
     lambda n: n.customers.import_credit_balance(
         "cust",
         {
