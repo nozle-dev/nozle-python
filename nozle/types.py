@@ -11,6 +11,22 @@ class TrackOptions(TypedDict, total=False):
     timestamp: str
 
 
+class _TrackBatchEventRequired(TypedDict):
+    customer_id: str
+    event: str
+
+
+class TrackBatchEvent(_TrackBatchEventRequired, total=False):
+    """One event of ``track_batch()``: the arguments of ``track()`` as a mapping."""
+
+    metadata: JSONMapping
+    subscription_id: str
+    #: Generated (UUID v7) when missing, and returned in the result. Unique within the call.
+    transaction_id: str
+    #: RFC 3339 or Unix seconds, as for ``track()``. Each event keeps its own.
+    timestamp: str
+
+
 class CostEventAccepted(TypedDict):
     status: Literal["accepted"]
     cost_event_id: str

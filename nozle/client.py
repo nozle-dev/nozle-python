@@ -3,7 +3,18 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 from urllib.parse import quote
 
 import requests
@@ -32,6 +43,7 @@ from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.plan_versions import PlanVersionsNamespace
 from nozle.track import track_steps
+from nozle.track_batch import TrackBatchResult, track_batch_steps
 from nozle.types import (
     CancellationPolicy,
     CancelSubscriptionResult,
@@ -55,6 +67,7 @@ from nozle.types import (
     SubscriptionTransitionPreview,
     SubscriptionTransitionRefundMode,
     SubscriptionTransitionResult,
+    TrackBatchEvent,
     WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
@@ -161,6 +174,30 @@ class _BaseNozle(Resource[M]):
             timestamp,
         )
         return transaction
+
+    @endpoint
+    def track_batch(
+        self,
+        events: Sequence[TrackBatchEvent],
+        *,
+        chunk_size: Optional[int] = None,
+        concurrency: Optional[int] = None,
+    ) -> Steps[TrackBatchResult]:
+        """Record many events through Engine's ``/events/batch``.
+
+        The events are split into gzip requests of ``chunk_size`` (1 to 5000, the Engine maximum;
+        default 5000) sent ``concurrency`` at a time (1 to 64, default 4). A request above a
+        lower Engine cap is split and resent. The result has one
+        entry per event: ``accepted``, ``rejected`` (with Engine's per-field codes) or ``failed``
+        (with the error of its request). Raises only for invalid arguments; a failed request
+        never hides the others' results. Engine resolves each customer's subscription; this call
+        makes no lookup.
+        """
+        return (
+            yield from track_batch_steps(
+                self._engine, self.api_key, events, chunk_size, concurrency
+            )
+        )
 
     @endpoint
     def can(

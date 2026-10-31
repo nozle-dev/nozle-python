@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
+import json
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from functools import partial
-from typing import TYPE_CHECKING, Any, Awaitable, Dict, Generic, Mapping, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Dict,
+    Generic,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -61,6 +75,7 @@ class BaseTransport(Generic[M]):
         headers: Optional[Mapping[str, str]] = None,
         expect_json: bool = True,
         idempotent: bool = False,
+        gzip_body: bool = False,
     ) -> Any:
         raise NotImplementedError
 
@@ -72,18 +87,31 @@ class BaseTransport(Generic[M]):
         """One request, as a step an operation yields (see ``nozle._operation``)."""
         return partial(self.request, operation, method, path, **options)
 
+    def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
+        """Operations run ``concurrency`` at a time, as one step that returns their results."""
+        raise NotImplementedError
+
     def _prepare(
         self,
         method: str,
         json_body: Optional[Mapping[str, Any]],
         headers: Optional[Mapping[str, str]],
         idempotent: bool,
-    ) -> Tuple[Dict[str, str], int, Any]:
+        gzip_body: bool = False,
+    ) -> Tuple[Dict[str, str], int, Any, Optional[bytes]]:
+        """Headers, retries, and the body: JSON to send as is, or gzip bytes when ``gzip_body``."""
         request_headers: Dict[str, str] = {"Authorization": f"Bearer {self._api_key}"}
         if json_body is not None:
             request_headers["Content-Type"] = "application/json"
         if headers:
             request_headers.update(headers)
+        body = _without_unset(json_body)
+        compressed = None
+        if gzip_body and body is not None:
+            encoded = json.dumps(body, separators=(",", ":"), allow_nan=False).encode()
+            compressed = gzip.compress(encoded, compresslevel=6)
+            request_headers["Content-Encoding"] = "gzip"
+            body = None
 
         # Retry only a request that is safe to repeat: a read, a call with an Idempotency-Key, or a
         # call the caller marks idempotent. Network errors, timeouts, 429 and 5xx are retried.
@@ -91,7 +119,7 @@ class BaseTransport(Generic[M]):
             method.upper() in ("GET", "HEAD") or idempotent or "Idempotency-Key" in request_headers
         )
         retries = self.max_retries if safe else 0
-        return request_headers, retries, _without_unset(json_body)
+        return request_headers, retries, body, compressed
 
     @staticmethod
     def _done(response: Any, attempt: int, retries: int) -> bool:
@@ -172,8 +200,11 @@ class HttpTransport(BaseTransport[Sync]):
         headers: Optional[Mapping[str, str]] = None,
         expect_json: bool = True,
         idempotent: bool = False,
+        gzip_body: bool = False,
     ) -> Any:
-        request_headers, retries, body = self._prepare(method, json_body, headers, idempotent)
+        request_headers, retries, body, compressed = self._prepare(
+            method, json_body, headers, idempotent, gzip_body
+        )
         attempt = 0
         while True:
             response = None
@@ -184,6 +215,7 @@ class HttpTransport(BaseTransport[Sync]):
                     headers=request_headers,
                     params=params,
                     json=body,
+                    data=compressed,
                     timeout=self.timeout,
                 )
             except requests.RequestException as error:
@@ -194,6 +226,13 @@ class HttpTransport(BaseTransport[Sync]):
             time.sleep(self._delay(attempt, response))
             attempt += 1
         return self._result(operation, response, expect_json)
+
+    def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
+        def run_all() -> List[Any]:
+            with ThreadPoolExecutor(max_workers=min(concurrency, len(operations))) as pool:
+                return list(pool.map(run_sync, operations))
+
+        return run_all
 
     def close(self) -> None:
         if self._owns_session:
@@ -229,10 +268,13 @@ class AsyncHttpTransport(BaseTransport[Async]):
         headers: Optional[Mapping[str, str]] = None,
         expect_json: bool = True,
         idempotent: bool = False,
+        gzip_body: bool = False,
     ) -> Any:
         import httpx
 
-        request_headers, retries, body = self._prepare(method, json_body, headers, idempotent)
+        request_headers, retries, body, compressed = self._prepare(
+            method, json_body, headers, idempotent, gzip_body
+        )
         # requests leaves out a query value of None; httpx would send it empty.
         query = {key: value for key, value in (params or {}).items() if value is not None}
         attempt = 0
@@ -245,6 +287,7 @@ class AsyncHttpTransport(BaseTransport[Async]):
                     headers=request_headers,
                     params=query,
                     json=body,
+                    content=compressed,
                     timeout=self.timeout,
                     follow_redirects=True,
                 )
@@ -256,6 +299,18 @@ class AsyncHttpTransport(BaseTransport[Async]):
             await asyncio.sleep(self._delay(attempt, response))
             attempt += 1
         return self._result(operation, response, expect_json)
+
+    def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
+        async def run_all() -> List[Any]:
+            gate = asyncio.Semaphore(concurrency)
+
+            async def one(operation: Steps[Any]) -> Any:
+                async with gate:
+                    return await run_async(operation)
+
+            return list(await asyncio.gather(*(one(operation) for operation in operations)))
+
+        return run_all
 
 
 def _sanitize(value: Any, api_key: str) -> Any:

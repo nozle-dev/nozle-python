@@ -18,6 +18,9 @@ class NozleError(Exception):
 class NozleValidationError(NozleError, ValueError):
     """Raised before network I/O when a local SDK contract is invalid."""
 
+    #: Position of the offending event, when ``track_batch()`` rejects one event's fields.
+    index: Optional[int] = None
+
 
 class NozleAuthenticationError(NozleValidationError):
     """Raised when an operation is attempted with the wrong key type."""

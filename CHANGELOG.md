@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.24.0 — 2026-10-31
+
+### Added
+
+- `track_batch(events, chunk_size=None, concurrency=None)` on `Nozle` and `AsyncNozle` sends many events through `/events/batch`: gzipped chunks of at most 5000 (the Engine 2.28.0 maximum), a bounded number of requests in flight, and one result per event (`accepted`, `rejected` with Engine's per-field codes, or `failed` with the error of its request). Engine 2.28.0 stores the valid events of a request and names the refused ones on a 200. A request an older Engine refuses whole is not lost: the SDK rejects the events it names and resends the rest, and a request above a lower Engine cap (`too_many_events`) is split in half and resent. Gzip and chunks above 100 need Engine 2.28.0+. Every event has a transaction ID (generated and returned if missing), so a retried request records each event once. Raises `NozleValidationError` (now with an `index` for one event's fields) for invalid arguments before any request. It makes no subscription lookup; Engine resolves it. New: `TrackBatchEvent`, `TrackBatchResult`, `TrackBatchEventResult`.
+
 ## 0.23.0 — 2026-10-30
 
 ### Breaking
