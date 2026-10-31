@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-## 0.28.0 — 2026-10-31
+## 0.28.0 — 2026-11-01
+
+0.26.0 (event buffer) and 0.27.0 (credit holds) below were not published separately: their changes ship in 0.28.0.
 
 Needs Engine 2.34.0 for budgets.
 
