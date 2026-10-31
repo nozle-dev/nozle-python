@@ -170,6 +170,52 @@ def test_budget_is_none_when_the_402_carries_no_budget() -> None:
     assert BudgetExceededError("x", 402, {"code": "budget_exceeded"}).budget is None
 
 
+@pytest.mark.parametrize(
+    "status,code,error",
+    [
+        (429, "usage_limit_exceeded", UsageLimitExceededError),
+        (402, "budget_exceeded", BudgetExceededError),
+    ],
+)
+def test_a_refusal_is_sent_once_and_raised_typed(
+    requests_mock: requests_mock.Mocker, status: int, code: str, error: type
+) -> None:
+    matcher = requests_mock.get(
+        f"{ENGINE}/api/v1/customers/acme/budgets", status_code=status, json={"code": code}
+    )
+    with pytest.raises(error):
+        Nozle("sk_test", base_url=ENGINE, retry_delay=0, max_retries=2).budgets.list("acme")
+    assert matcher.call_count == 1
+
+
+def test_another_429_is_still_retried(requests_mock: requests_mock.Mocker) -> None:
+    matcher = requests_mock.get(
+        f"{ENGINE}/api/v1/customers/acme/budgets", status_code=429, json={"code": "rate_limited"}
+    )
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test", base_url=ENGINE, retry_delay=0, max_retries=2).budgets.list("acme")
+    assert matcher.call_count == 3
+
+
+async def test_async_429_usage_limit_exceeded_is_sent_once() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(429, json={"code": "usage_limit_exceeded"})
+
+    nozle = AsyncNozle(
+        "sk_test",
+        base_url=ENGINE,
+        retry_delay=0,
+        max_retries=2,
+        _client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    with pytest.raises(UsageLimitExceededError):
+        await nozle.budgets.list("acme")
+    assert len(calls) == 1
+
+
 def test_budget_holds_carry_kind_amount_held_and_currency(
     requests_mock: requests_mock.Mocker,
 ) -> None:

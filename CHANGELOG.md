@@ -14,6 +14,7 @@ Needs Engine 2.31.0 for budgets.
   - `RefusalReason` (`str` enum): `FEATURE_NOT_FOUND`, `NO_SUBSCRIPTION`, `SUBSCRIPTION_REQUIRED`, `NO_ENTITLEMENT`, `USAGE_LIMIT_EXCEEDED`, `ECONOMIC_POLICY_DENIED`, `CUSTOMER_PAYMENT_OVERDUE`, `INSUFFICIENT_CREDITS`, `BUDGET_EXCEEDED`. Members equal their string; results keep the plain string, so an unknown reason passes through.
   - `BudgetExceededError` (HTTP 402 `budget_exceeded`, with `.budget` when the response carries it) and `UsageLimitExceededError` (HTTP 429 `usage_limit_exceeded`), subclasses of `NozleAPIError` chosen by status and exact `code` wherever a failed response raises.
   - Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `BudgetHold` (`kind: "budget"`, `amount_held`, `currency`) and `BudgetHoldResult` (with `reason` `budget_exceeded` and `budget` when it does not fit). `create()` returns `HoldResult`, `finalize()` `HoldFinalizeResult` (a budget hold's finalize returns the hold), `release()` and `get()` `Hold`: unions of the credit and budget shapes.
+- A 429 whose `code` is exactly `usage_limit_exceeded` is a refusal, not a rate limit, so it is no longer retried (sync and async); other 429s still follow `max_retries` and `Retry-After`. A 402 (including `budget_exceeded`) was never retried.
 - `tests/contract/openapi_schemas.json` gains `Budget` and the `budget` keys by hand until nozle-openapi.yaml documents them.
 
 ## 0.27.0 — 2026-10-31
