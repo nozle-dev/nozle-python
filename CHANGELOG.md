@@ -6,13 +6,13 @@
 
 ### Added
 
-- `usage.holds` on `Nozle` and `AsyncNozle` reserves credits before work whose cost is known only after it (Engine credit balance holds, NLD-9). Needs Engine 2.30.0 and a secret key.
+- `usage.holds` on `Nozle` and `AsyncNozle` reserves credits before work whose cost is known only after it (Engine credit balance holds, NLD-9). Needs Engine 2.33.0 and a secret key.
   - `create(customer_id, feature_code, *, idempotency_key, entity_id=None, credit_system_code=None, properties=None, timestamp=None, ttl_seconds=None)` sends `POST /usage/holds` with the `usage.track()` body plus `ttl_seconds` (Engine default 900, 1 to 86400). The `Idempotency-Key` is required, and a key retried from the same client sends the same generated `timestamp`, as `usage.track()` does. A denial is a result, not an error: `allowed: False`, `status` `denied`, `reason` `insufficient_credits`.
   - `finalize(hold_id, *, properties=None, timestamp=None)` spends the actual usage (`POST /usage/holds/{id}/finalize`) and returns the `usage.track()` result plus `hold_id`, `hold_status`, `credits_held`, `credits_released` and `hold_expired`. Engine replays a finalized hold for the same body, so it is retried, and the generated `timestamp` is kept per hold.
   - `release(hold_id)` (idempotent; HTTP 409 `hold_already_resolved` for a finalized hold), `get(hold_id)` and `list(customer_id, *, status=None)` (`GET /customers/{id}/credit-holds`, the newest 100).
   - Engine errors keep their code on `NozleAPIError`: `hold_not_found` (404), `hold_already_resolved` (409), `hold_ttl_invalid` (400). An invalid `ttl_seconds` or `status` raises `NozleValidationError` before any request.
   - Types: `CreditHold`, `CreditHoldResult`, `CreditHoldFinalizeResult`, `CreditHoldList`, `CreditHoldStatus`, and `UsageHoldsNamespace`.
-- Balances gain `held`, the credits reserved by open holds and already left out of `available`: `CreditBalance.held`, `CreditBalanceSource.held`, and `EntityCreditBalance.held`, `entity_held` and `shared_held`. Engine before 2.30.0 does not send them.
+- Balances gain `held`, the credits reserved by open holds and already left out of `available`: `CreditBalance.held`, `CreditBalanceSource.held`, and `EntityCreditBalance.held`, `entity_held` and `shared_held`. Engine before 2.33.0 does not send them.
 
 ## 0.26.0 — 2026-10-31
 
