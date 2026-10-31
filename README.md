@@ -360,6 +360,38 @@ repeat: reads, and calls with an idempotency key or that are idempotent by id. I
 mutation requests. Retry only with the same
 idempotency key after deciding the failure is safe to retry.
 
+### Credit notes and refunds
+
+Needs a secret key and a workspace with credit notes enabled (otherwise `NozleAPIError` 403 `feature_unavailable`). A credit note lowers a finalized invoice; its total is settled by crediting the customer's balance, refunding the original payment method (Stripe or Razorpay, started by Nozle), offsetting what the customer still owes, or a mix. `AsyncNozle` has the same methods, awaited.
+
+```python
+items = [{"fee_id": "fee_123", "amount_cents": 500}]  # fee_id: fees[].nozle_id of the invoice
+
+# 1. Preview: nothing is created. Taxes and coupons are applied.
+preview = nozle.credit_notes.preview("inv_123", items)
+preview["max_creditable_amount_cents"]  # the credit note's total
+preview["max_refundable_amount_cents"]  # what was paid and not refunded yet
+
+# 2a. Refund the items to the original payment method (partial refund: fewer or smaller items).
+note = nozle.credit_notes.refund(
+    "inv_123", items, reason="duplicated_charge", metadata={"ticket": "T-42"}
+)
+note["refund_status"]  # "pending", then "succeeded" or "failed" (webhook credit_note.refund_failure)
+
+# 2b. Or choose the split yourself: the three amounts add up to max_creditable_amount_cents.
+nozle.credit_notes.create(
+    "inv_123", items, refund_amount_cents=300, credit_amount_cents=200, reason="order_change"
+)
+
+nozle.credit_notes.list(customer_id="cus_1", refund_status="failed")
+nozle.credit_notes.get(note["nozle_id"])
+nozle.credit_notes.void(note["nozle_id"])  # voids the unused credit; never undoes a paid refund
+```
+
+`reason` is one of `duplicated_charge`, `product_unsatisfactory`, `order_change`, `order_cancellation`, `fraudulent_charge`, `other` (default). `refund()` raises `NozleAPIError` with code `refund_exceeds_paid_amount` and creates nothing when less was paid than the items are worth; pass `credit_remainder=True` to refund what was paid and credit the rest.
+
+The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `max_retries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list(customer_id=..., invoice_number=...)` before trying again. Test errors with `error.has_code(CANNOT_REFUND_UNPAID_INVOICE)` (also `HIGHER_THAN_REMAINING_INVOICE_AMOUNT`, `HIGHER_THAN_REMAINING_FEE_AMOUNT`, `DOES_NOT_MATCH_ITEM_AMOUNTS`, `INVALID_TYPE_OR_STATUS`, `NO_VOIDABLE_AMOUNT`). Nozle stores only the provider's refund id and status, never card or bank details.
+
 ## Existing operations
 
 ```python

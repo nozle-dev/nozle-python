@@ -829,6 +829,77 @@ class InvoicePage(TypedDict):
     meta: Dict[str, Any]
 
 
+CreditNoteReason = Literal[
+    "duplicated_charge",
+    "product_unsatisfactory",
+    "order_change",
+    "order_cancellation",
+    "fraudulent_charge",
+    "other",
+]
+
+
+class CreditNoteItem(TypedDict):
+    """One invoice fee (``fees[].nozle_id``) and how much of it, in cents before tax, to credit."""
+
+    fee_id: str
+    amount_cents: int
+
+
+class _CreditNoteRequired(TypedDict):
+    nozle_id: str
+    number: str
+    invoice_id: str
+    reason: str
+    currency: str
+    total_amount_cents: int
+    credit_amount_cents: int
+    refund_amount_cents: int
+    offset_amount_cents: int
+
+
+class CreditNote(_CreditNoteRequired, total=False):
+    """A credit note. ``refund_status`` is ``pending``, ``succeeded`` or ``failed``;
+    ``credit_status`` is ``available``, ``consumed`` or ``voided``."""
+
+    invoice_number: str
+    issuing_date: str
+    refund_status: Optional[str]
+    credit_status: Optional[str]
+    balance_amount_cents: int
+    taxes_amount_cents: int
+    description: Optional[str]
+    file_url: Optional[str]
+    items: List[Dict[str, Any]]
+    metadata: Any
+    customer: Dict[str, Any]
+
+
+class _CreditNotePreviewRequired(TypedDict):
+    invoice_id: str
+    currency: str
+    max_creditable_amount_cents: int
+    max_refundable_amount_cents: int
+
+
+class CreditNotePreview(_CreditNotePreviewRequired, total=False):
+    """What a credit note would be worth. Nothing is created."""
+
+    invoice_number: str
+    taxes_amount_cents: int
+    taxes_rate: float
+    sub_total_excluding_taxes_amount_cents: int
+    coupons_adjustment_amount_cents: int
+    max_offsettable_amount_cents: int
+    items: List[Dict[str, Any]]
+    applied_taxes: List[Dict[str, Any]]
+
+
+class CreditNotePage(TypedDict):
+    credit_notes: List[CreditNote]
+    meta: Dict[str, Any]
+
+
 class AlertThreshold(TypedDict):
     code: Optional[str]
     value: str

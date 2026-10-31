@@ -32,6 +32,7 @@ from nozle.alerts import AlertsNamespace
 from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
 from nozle.cost_intelligence import CostIntelligenceNamespace
+from nozle.credit_notes import CreditNotesNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
 from nozle.customers import CustomersNamespace
@@ -146,6 +147,7 @@ class _BaseNozle(Resource[M]):
         self.usage = UsageNamespace(self._engine, self.api_key)
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
+        self.credit_notes = CreditNotesNamespace(self._events, self.api_key)
         self.alerts = AlertsNamespace(self._events, self.api_key)
         self.plan_versions = PlanVersionsNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}

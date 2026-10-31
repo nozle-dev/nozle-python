@@ -3,6 +3,17 @@ from nozle.alerts import AlertsNamespace
 from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
 from nozle.cost_intelligence import CostIntelligenceNamespace
+from nozle.credit_notes import (
+    CANNOT_REFUND_UNPAID_INVOICE,
+    DOES_NOT_MATCH_ITEM_AMOUNTS,
+    HIGHER_THAN_REMAINING_FEE_AMOUNT,
+    HIGHER_THAN_REMAINING_INVOICE_AMOUNT,
+    INVALID_TYPE_OR_STATUS,
+    NO_VOIDABLE_AMOUNT,
+    REFUND_EXCEEDS_PAID_AMOUNT,
+    TOTAL_AMOUNT_MUST_BE_POSITIVE,
+    CreditNotesNamespace,
+)
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
 from nozle.customers import CustomersNamespace
@@ -44,6 +55,11 @@ from nozle.types import (
     CreditBalanceImportRequest,
     CreditBalances,
     CreditBalanceSource,
+    CreditNote,
+    CreditNoteItem,
+    CreditNotePage,
+    CreditNotePreview,
+    CreditNoteReason,
     CreditOperation,
     CreditOperationAllocation,
     CreditOperationPage,
@@ -164,6 +180,20 @@ __all__ = [
     "AlertPage",
     "AlertsNamespace",
     "AsyncNozle",
+    "CANNOT_REFUND_UNPAID_INVOICE",
+    "DOES_NOT_MATCH_ITEM_AMOUNTS",
+    "HIGHER_THAN_REMAINING_FEE_AMOUNT",
+    "HIGHER_THAN_REMAINING_INVOICE_AMOUNT",
+    "INVALID_TYPE_OR_STATUS",
+    "NO_VOIDABLE_AMOUNT",
+    "REFUND_EXCEEDS_PAID_AMOUNT",
+    "TOTAL_AMOUNT_MUST_BE_POSITIVE",
+    "CreditNote",
+    "CreditNoteItem",
+    "CreditNotePage",
+    "CreditNotePreview",
+    "CreditNoteReason",
+    "CreditNotesNamespace",
     "Invoice",
     "InvoicePage",
     "InvoicesNamespace",
