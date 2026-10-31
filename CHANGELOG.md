@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.26.0 — 2026-10-31
+
+### Added
+
+- `Nozle.event_buffer(max_batch_size=500, flush_interval=5, max_queue_size=10000, max_attempts=3, on_error=None)` returns an `EventBuffer` that queues events and sends them through `track_batch()` from a daemon thread: when `max_batch_size` events wait, every `flush_interval` seconds, on `flush(timeout=None)`, on `close(timeout=None)` (also a context manager) and at process exit (an `atexit` handler with a 5 second timeout, removed by `close()`). `buffer.track()` takes the arguments of `track()`, makes no request and returns the `transaction_id` (generated as UUID v7 when missing and kept on every resend). Dropped events go to `on_error(error, events)` with an `EventBufferError` whose `code` is `buffer_full` (the queue is full; the new event is dropped), `rejected` (Engine refused it; not resent), `failed` (still failing after `max_attempts` flushes) or `closed` (`track()` after `close()`); without a callback, a `NozleTrackingWarning`. The same names, defaults and codes as the Node and Go SDKs. Serverless code must call `flush()` or `close()` before returning. `AsyncNozle` has no buffer yet.
+- A batch call with `concurrency=1` (or one chunk) runs on the calling thread instead of a thread pool, so it also works during interpreter exit.
+
+### Known
+
+- The OpenAI and Anthropic wrappers and `capture_http_client()` still send each event on its own, not through a buffer.
+- The queue is kept in memory only.
+
 ## 0.25.0 — 2026-10-31
 
 ### Added

@@ -229,6 +229,9 @@ class HttpTransport(BaseTransport[Sync]):
 
     def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
         def run_all() -> List[Any]:
+            if min(concurrency, len(operations)) <= 1:
+                # No pool for one at a time; it also works at interpreter exit, which refuses pools.
+                return [run_sync(operation) for operation in operations]
             with ThreadPoolExecutor(max_workers=min(concurrency, len(operations))) as pool:
                 return list(pool.map(run_sync, operations))
 

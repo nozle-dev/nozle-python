@@ -27,6 +27,7 @@ from nozle.errors import (
     NozleTransportError,
     NozleValidationError,
 )
+from nozle.event_buffer import EventBuffer, EventBufferError
 from nozle.events import EventsNamespace
 from nozle.integrations import NozleTrackingWarning
 from nozle.integrations.anthropic import wrap_anthropic
@@ -244,6 +245,8 @@ __all__ = [
     "EntityCreditTransferSource",
     "EntitiesNamespace",
     "EntitySubscriptionsNamespace",
+    "EventBuffer",
+    "EventBufferError",
     "EventsNamespace",
     "EntitySubscription",
     "EntitySubscriptionCancelResult",

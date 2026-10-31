@@ -548,8 +548,61 @@ The contract:
 
 `track_batch()` is not `usage.track()`: it records events like `track()` does and does not
 deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events
-sends nothing. There is no client-side buffer yet; to batch events as they happen, collect
-them and call `track_batch()`.
+sends nothing. To batch events as they happen, use an event buffer.
+
+### Buffering events
+
+`event_buffer()` returns a buffer that queues events and sends them through `track_batch()` from
+a background thread. `buffer.track()` takes the arguments of `track()`, makes no request and
+returns the event's `transaction_id` (yours, or a generated UUID version 7 that every resend
+keeps, so Engine records the event once). It is available on `Nozle` (sync) only.
+
+```python
+def report(error, events):
+    # error.code: "buffer_full", "rejected", "failed" or "closed"
+    print(error.code, [e["transaction_id"] for e in events], error.errors, error.__cause__)
+
+buffer = nozle.event_buffer(on_error=report)
+buffer.track("cust_123", "api_call", {"tokens": 100})
+
+buffer.flush(timeout=10)  # send what is waiting now; False if it did not finish in time
+buffer.close()            # flush, stop the thread, refuse later events
+
+with nozle.event_buffer() as buffer:  # or close it with a with block
+    buffer.track("cust_123", "api_call")
+```
+
+| Option | Default | |
+|---|---|---|
+| `max_batch_size` | 500 | 1 to 5000. A batch is sent as soon as this many events wait. |
+| `flush_interval` | 5 | Seconds between timer flushes of whatever waits; 0 turns the timer off. |
+| `max_queue_size` | 10000 | Events waiting plus those in a request being sent. |
+| `max_attempts` | 3 | Flushes an event may fail in before it is dropped and reported. |
+| `on_error` | warning | `on_error(error, events)`; without it a `NozleTrackingWarning`. |
+
+- **Sending.** One flush runs at a time; a size or timer trigger during a flush waits for it.
+  `flush(timeout=None)` and `close(timeout=None)` return True when done, False on timeout.
+  `buffer.size` is the number of events waiting.
+- **Nothing is lost silently.** Every dropped event goes to `on_error` with an
+  `EventBufferError` whose `code` is:
+  - `buffer_full`: the queue held `max_queue_size` events; the new event is dropped (`track()`
+    still returns its `transaction_id` and raises nothing).
+  - `rejected`: Engine refused the event (`error.errors` has its field codes). One report per
+    event; it is not resent.
+  - `failed`: its request still failed after the batch call's own retries in `max_attempts`
+    flushes (`error.__cause__` is the last request error). A failed event goes back to the
+    front of the queue for the next flush, with the same `transaction_id`. One report per flush.
+  - `closed`: `track()` after `close()`.
+- **Invalid events** (a missing `customer_id` or `event`, a bad `timestamp`) raise
+  `NozleValidationError` from `track()`, before they are queued.
+- **Exit.** The worker is a daemon thread. An `atexit` handler flushes with a 5 second timeout
+  and reports what it could not send as `failed`; `close()` removes the handler. `close()`
+  keeps flushing until the queue is empty, so a failing event is retried up to `max_attempts`.
+- **Serverless.** A function host may freeze or end the process right after your handler
+  returns, before the timer or the exit hook runs. Call `buffer.flush()` (or `close()`)
+  before returning.
+- Like `track_batch()`, the buffer makes no subscription lookup, and the queue lives in memory
+  only. The OpenAI and Anthropic wrappers still send each event on its own.
 
 ## OpenAI and Anthropic wrappers
 
