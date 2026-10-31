@@ -540,6 +540,8 @@ class CreditBalanceSource(TypedDict):
     subscription_id: Optional[str]
     initial: str
     remaining: str
+    #: Credits of this source reserved by open holds (Engine 2.30.0+).
+    held: str
     valid_from: str
     expires_at: Optional[str]
     priority: int
@@ -555,6 +557,8 @@ class CreditBalance(TypedDict):
     unit_name: str
     system_status: str
     available: str
+    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.30.0+).
+    held: str
     as_of: str
     sources: List[CreditBalanceSource]
 
@@ -688,6 +692,10 @@ class EntityCreditBalance(TypedDict):
     entity_available: str
     shared_available: str
     effective_available: str
+    entity_held: str
+    shared_held: str
+    #: Credits reserved by open holds on what this Entity can spend (Engine 2.30.0+).
+    held: str
     consumed: str
     pool_policy: Optional[EntityCreditPoolPolicy]
     as_of: str
@@ -783,6 +791,61 @@ class UsageTrackResult(_UsageTrackResultRequired, total=False):
     remaining: str
     reason: str
     deductions: List[UsageDeduction]
+
+
+CreditHoldStatus = Literal["held", "denied", "finalized", "released", "expired"]
+
+
+class _CreditHoldRequired(TypedDict):
+    hold_id: str
+    status: CreditHoldStatus
+    customer_id: str
+    feature_code: str
+    credit_system: str
+    metric_amount: str
+    credits_required: str
+    #: ``0`` for a denied hold.
+    credits_held: str
+    expires_at: str
+    created_at: str
+    resolved_at: Optional[str]
+
+
+class CreditHold(_CreditHoldRequired, total=False):
+    """A credit balance hold: Engine ``GET /usage/holds/{id}``."""
+
+    entity_id: str
+    subscription_id: str
+    pool_policy: str
+    #: The consume operation a finalize wrote.
+    operation_id: str
+
+
+class _CreditHoldResultRequired(CreditHold):
+    allowed: bool
+    available: str
+
+
+class CreditHoldResult(_CreditHoldResultRequired, total=False):
+    """``usage.holds.create()``: a denial is ``allowed: False`` with ``status`` ``denied``."""
+
+    reason: str
+
+
+class CreditHoldFinalizeResult(UsageTrackResult):
+    """``usage.holds.finalize()``: the ``usage.track()`` result plus the hold's outcome."""
+
+    hold_id: str
+    hold_status: CreditHoldStatus
+    credits_held: str
+    credits_released: str
+    #: The hold had expired, so the finalize ran as a plain track.
+    hold_expired: bool
+
+
+class CreditHoldList(TypedDict):
+    customer_id: str
+    holds: List[CreditHold]
 
 
 class _CustomerUsageRequired(TypedDict):

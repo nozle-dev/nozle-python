@@ -101,6 +101,7 @@
       "credit_system_id",
       "credit_system_name",
       "customer_id",
+      "held",
       "sources",
       "system_status",
       "unit_name"
@@ -112,6 +113,7 @@
       "credit_system_id",
       "credit_system_name",
       "customer_id",
+      "held",
       "sources",
       "system_status",
       "unit_name"
@@ -175,10 +177,13 @@
       "customer_id",
       "effective_available",
       "entity_available",
+      "entity_held",
       "entity_id",
       "entity_status",
+      "held",
       "pool_policy",
       "shared_available",
+      "shared_held",
       "sources",
       "system_status",
       "unit_name"
@@ -192,10 +197,13 @@
       "customer_id",
       "effective_available",
       "entity_available",
+      "entity_held",
       "entity_id",
       "entity_status",
+      "held",
       "pool_policy",
       "shared_available",
+      "shared_held",
       "sources",
       "system_status",
       "unit_name"

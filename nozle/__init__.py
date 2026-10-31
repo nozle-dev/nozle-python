@@ -56,6 +56,11 @@ from nozle.types import (
     CreditBalanceImportRequest,
     CreditBalances,
     CreditBalanceSource,
+    CreditHold,
+    CreditHoldFinalizeResult,
+    CreditHoldList,
+    CreditHoldResult,
+    CreditHoldStatus,
     CreditNote,
     CreditNoteItem,
     CreditNotePage,
@@ -147,7 +152,7 @@ from nozle.types import (
     UsageTrackResult,
     WithdrawPendingSubscriptionChangeResult,
 )
-from nozle.usage import UsageNamespace
+from nozle.usage import UsageHoldsNamespace, UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
 
 __all__ = [
@@ -217,6 +222,11 @@ __all__ = [
     "ManagePaymentMethodResult",
     "CompletedCheckoutResult",
     "CreditBalance",
+    "CreditHold",
+    "CreditHoldFinalizeResult",
+    "CreditHoldList",
+    "CreditHoldResult",
+    "CreditHoldStatus",
     "CreditBalanceSource",
     "CreditBalances",
     "CreditOperation",
@@ -296,6 +306,7 @@ __all__ = [
     "TrackOptions",
     "UsageCheckResult",
     "UsageDeduction",
+    "UsageHoldsNamespace",
     "UsageNamespace",
     "UsageTrackResult",
     "__version__",

@@ -355,6 +355,42 @@ consumption = nozle.usage.track(
 )
 ```
 
+#### Credit holds
+
+When the cost is known only after the work (an LLM call, an agent run), reserve credits first,
+then finalize with the actual usage or release them. Needs Engine 2.30.0. Held credits are left out
+of `available` for every other caller, and balances report them as `held`.
+
+```python
+hold = nozle.usage.holds.create(
+    "customer-123",
+    "agent_execution",
+    entity_id="user-42",
+    properties={"tokens": 8000},  # the most the work can use
+    ttl_seconds=600,  # default 900, at most 86400; an expired hold stops reserving
+    idempotency_key="run-123",
+)
+if not hold["allowed"]:  # status "denied", reason "insufficient_credits"
+    raise RuntimeError("not enough credits")
+
+try:
+    tokens = run_agent()
+except Exception:
+    nozle.usage.holds.release(hold["hold_id"])
+    raise
+
+result = nozle.usage.holds.finalize(hold["hold_id"], properties={"tokens": tokens})
+result["credits_consumed"], result["credits_released"], result["hold_expired"]
+
+nozle.usage.holds.get(hold["hold_id"])
+nozle.usage.holds.list("customer-123", status="held")
+```
+
+Finalizing above the held amount spends free balance too, or answers `allowed: False` and keeps
+the hold open. A finalize after expiry runs as a plain `usage.track()` with `hold_expired: True`.
+Finalizing with 0 releases the hold. `release()` is idempotent; a finalized hold answers 409
+`hold_already_resolved`, and an unknown one 404 `hold_not_found`.
+
 The SDK retries up to 2 times by default (`max_retries=0` disables), and only calls that are safe to
 repeat: reads, and calls with an idempotency key or that are idempotent by id. It never retries other
 mutation requests. Retry only with the same
