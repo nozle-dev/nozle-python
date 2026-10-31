@@ -355,6 +355,66 @@ consumption = nozle.usage.track(
 )
 ```
 
+#### Credit holds
+
+When the cost is known only after the work (an LLM call, an agent run), reserve credits first,
+then finalize with the actual usage or release them. Needs Engine 2.34.0. Held credits are left out
+of `available` for every other caller, and balances report them as `held`.
+
+```python
+hold = nozle.usage.holds.create(
+    "customer-123",
+    "agent_execution",
+    entity_id="user-42",
+    properties={"tokens": 8000},  # the most the work can use
+    ttl_seconds=600,  # default 900, at most 86400; an expired hold stops reserving
+    idempotency_key="run-123",
+)
+if not hold["allowed"]:  # status "denied", reason "insufficient_credits"
+    raise RuntimeError("not enough credits")
+
+try:
+    tokens = run_agent()
+except Exception:
+    nozle.usage.holds.release(hold["hold_id"])
+    raise
+
+result = nozle.usage.holds.finalize(hold["hold_id"], properties={"tokens": tokens})
+result["credits_consumed"], result["credits_released"], result["hold_expired"]
+
+nozle.usage.holds.get(hold["hold_id"])
+nozle.usage.holds.list("customer-123", status="held")
+```
+
+Finalizing above the held amount spends free balance too, or answers `allowed: False` and keeps
+the hold open. A finalize after expiry runs as a plain `usage.track()` with `hold_expired: True`.
+Finalizing with 0 releases the hold. `release()` is idempotent; a finalized hold answers 409
+`hold_already_resolved`, and an unknown one 404 `hold_not_found`.
+
+#### Money budgets
+
+Spend limits (Core) cap what a customer's metered usage may cost per period. Needs Engine 2.34.0.
+
+```python
+from nozle import RefusalReason
+
+decision = nozle.can("customer-123", "agent_execution")
+if not decision["allowed"] and decision["reason"] == RefusalReason.BUDGET_EXCEEDED:
+    budget = decision["budget"]  # limit, spent, held, remaining, currency, period_end, status, ...
+
+budgets = nozle.budgets.list("customer-123", subscription_id="sub-123")["budgets"]
+```
+
+`can()`, `usage.check()` and `usage.track()` answer `allowed: False`, `reason: "budget_exceeded"`
+with `budget` when a hard limit covering the Feature is used up; a soft limit never refuses.
+`RefusalReason` members equal their string, and an unknown reason arrives as its plain string.
+A plain `can()` is check-then-call, so calls in flight can overrun a cap; for an exact cap take a
+hold: on a Feature billed in money `usage.holds.create()` returns a budget hold (`kind: "budget"`,
+`amount_held`, `currency`) and refuses with `budget_exceeded` when the estimated spend does not fit.
+Where a failed response raises, a 402 `budget_exceeded` is `BudgetExceededError` (with `.budget`
+when sent) and a 429 `usage_limit_exceeded` is `UsageLimitExceededError`; both subclass
+`NozleAPIError`. Through the LLM proxy the provider SDK's own error carries the same `code`.
+
 The SDK retries up to 2 times by default (`max_retries=0` disables), and only calls that are safe to
 repeat: reads, and calls with an idempotency key or that are idempotent by id. It never retries other
 mutation requests. Retry only with the same
@@ -548,8 +608,66 @@ The contract:
 
 `track_batch()` is not `usage.track()`: it records events like `track()` does and does not
 deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events
-sends nothing. There is no client-side buffer yet; to batch events as they happen, collect
-them and call `track_batch()`.
+sends nothing. To batch events as they happen, use an event buffer.
+
+### Buffering events
+
+`event_buffer()` returns a buffer that queues events and sends them through `track_batch()` from
+a background thread. `buffer.track()` takes the arguments of `track()`, makes no request and
+returns the event's `transaction_id` (yours, or a generated UUID version 7 that every resend
+keeps, so Engine records the event once). It is available on `Nozle` (sync) only.
+
+```python
+def report(error, events):
+    # error.code: "buffer_full", "rejected", "failed" or "closed"
+    print(error.code, [e["transaction_id"] for e in events], error.errors, error.__cause__)
+
+buffer = nozle.event_buffer(on_error=report)
+buffer.track("cust_123", "api_call", {"tokens": 100})
+
+buffer.flush(timeout=10)  # send what is waiting now; False if it did not finish in time
+buffer.close()            # flush, stop the thread, refuse later events
+
+with nozle.event_buffer() as buffer:  # or close it with a with block
+    buffer.track("cust_123", "api_call")
+```
+
+| Option | Default | |
+|---|---|---|
+| `max_batch_size` | 500 | 1 to 5000. A batch is sent as soon as this many events wait. |
+| `flush_interval` | 5 | Seconds between timer flushes of whatever waits; 0 turns the timer off. |
+| `max_queue_size` | 10000 | Events waiting plus those in a request being sent. |
+| `max_attempts` | 3 | Flushes an event may fail in before it is dropped and reported. |
+| `on_error` | warning | `on_error(error, events)`; without it a `NozleTrackingWarning`. |
+
+- **Sending.** One flush runs at a time; a size or timer trigger during a flush waits for it.
+  `flush(timeout=None)` and `close(timeout=None)` return True when done, False on timeout.
+  `buffer.size` is the number of events waiting.
+- **Nothing is lost silently.** Every dropped event goes to `on_error` with an
+  `EventBufferError` whose `code` is:
+  - `buffer_full`: the queue held `max_queue_size` events; the new event is dropped (`track()`
+    still returns its `transaction_id` and raises nothing).
+  - `rejected`: Engine refused the event (`error.errors` has its field codes). One report per
+    event; it is not resent.
+  - `failed`: its request still failed after the batch call's own retries in `max_attempts`
+    flushes (`error.__cause__` is the last request error). A failed event goes back to the
+    front of the queue for the next flush, with the same `transaction_id`. One report per flush.
+  - `closed`: `track()` after `close()`.
+- **Backoff.** After a flush in which any event failed, the size and timer flushes pause for
+  1 second, doubling after each further flush with failures, up to 60 seconds; a flush without
+  failures ends the pause. Events keep queueing meanwhile (up to `max_queue_size`), so an
+  outage longer than a few flush intervals does not use up `max_attempts`. `flush()`,
+  `close()` and the exit hook send at once, without waiting for the pause.
+- **Invalid events** (a missing `customer_id` or `event`, a bad `timestamp`) raise
+  `NozleValidationError` from `track()`, before they are queued.
+- **Exit.** The worker is a daemon thread. An `atexit` handler flushes with a 5 second timeout
+  and reports what it could not send as `failed`; `close()` removes the handler. `close()`
+  keeps flushing until the queue is empty, so a failing event is retried up to `max_attempts`.
+- **Serverless.** A function host may freeze or end the process right after your handler
+  returns, before the timer or the exit hook runs. Call `buffer.flush()` (or `close()`)
+  before returning.
+- Like `track_batch()`, the buffer makes no subscription lookup, and the queue lives in memory
+  only. The OpenAI and Anthropic wrappers still send each event on its own.
 
 ## OpenAI and Anthropic wrappers
 

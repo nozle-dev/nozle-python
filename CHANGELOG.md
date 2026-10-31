@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+## 0.28.0 — 2026-11-01
+
+0.26.0 (event buffer) and 0.27.0 (credit holds) below were not published separately: their changes ship in 0.28.0.
+
+Needs Engine 2.34.0 for budgets.
+
+### Added
+
+- Money budgets (NLD-16) on `Nozle` and `AsyncNozle`.
+  - `budgets.list(customer_id, *, subscription_id=None)` reads `GET /customers/{id}/budgets` and returns `{customer_id, subscription_id, budgets}`: every spend limit of the subscription with its spend, open holds and status in the current period. `Budget` has `feature_code` (`None` for the total limit), `limit`, `spent`, `held`, `remaining` (decimal strings in major units), `currency`, `period` (`billing_period`, `calendar_month`, `lifetime`), `period_start`, `period_end`, `mode` (`hard`, `soft`), `status` (`ok`, `warning`, `exceeded`) and `as_of`. Types: `Budget`, `BudgetList`, `BudgetPeriod`, `BudgetMode`, `BudgetStatus`, and `BudgetsNamespace`.
+  - `CanResult`, `UsageCheckResult` and `UsageTrackResult` gain `budget`: `can()`, `usage.check()` and `usage.track()` answer `allowed: False`, `reason: "budget_exceeded"` with the used-up limit. They still return the refusal; nothing raises.
+  - `RefusalReason` (`str` enum): `FEATURE_NOT_FOUND`, `NO_SUBSCRIPTION`, `SUBSCRIPTION_REQUIRED`, `NO_ENTITLEMENT`, `USAGE_LIMIT_EXCEEDED`, `ECONOMIC_POLICY_DENIED`, `CUSTOMER_PAYMENT_OVERDUE`, `INSUFFICIENT_CREDITS`, `BUDGET_EXCEEDED`. Members equal their string; results keep the plain string, so an unknown reason passes through.
+  - `BudgetExceededError` (HTTP 402 `budget_exceeded`, with `.budget` when the response carries it) and `UsageLimitExceededError` (HTTP 429 `usage_limit_exceeded`), subclasses of `NozleAPIError` chosen by status and exact `code` wherever a failed response raises.
+  - Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `BudgetHold` (`kind: "budget"`, `amount_held`, `currency`) and `BudgetHoldResult` (with `reason` `budget_exceeded` and `budget` when it does not fit). `create()` returns `HoldResult`, `finalize()` `HoldFinalizeResult` (a budget hold's finalize returns the hold), `release()` and `get()` `Hold`: unions of the credit and budget shapes.
+- A 429 whose `code` is exactly `usage_limit_exceeded` is a refusal, not a rate limit, so it is no longer retried (sync and async); other 429s still follow `max_retries` and `Retry-After`. A 402 (including `budget_exceeded`) was never retried.
+- `tests/contract/openapi_schemas.json` gains `Budget` and the `budget` keys by hand until nozle-openapi.yaml documents them.
+
+## 0.27.0 — 2026-10-31
+
+### Added
+
+- `usage.holds` on `Nozle` and `AsyncNozle` reserves credits before work whose cost is known only after it (Engine credit balance holds, NLD-9). Needs Engine 2.34.0 and a secret key.
+  - `create(customer_id, feature_code, *, idempotency_key, entity_id=None, credit_system_code=None, properties=None, timestamp=None, ttl_seconds=None)` sends `POST /usage/holds` with the `usage.track()` body plus `ttl_seconds` (Engine default 900, 1 to 86400). The `Idempotency-Key` is required, and a key retried from the same client sends the same generated `timestamp`, as `usage.track()` does. A denial is a result, not an error: `allowed: False`, `status` `denied`, `reason` `insufficient_credits`.
+  - `finalize(hold_id, *, properties=None, timestamp=None)` spends the actual usage (`POST /usage/holds/{id}/finalize`) and returns the `usage.track()` result plus `hold_id`, `hold_status`, `credits_held`, `credits_released` and `hold_expired`. Engine replays a finalized hold for the same body, so it is retried, and the generated `timestamp` is kept per hold.
+  - `release(hold_id)` (idempotent; HTTP 409 `hold_already_resolved` for a finalized hold), `get(hold_id)` and `list(customer_id, *, status=None)` (`GET /customers/{id}/credit-holds`, the newest 100).
+  - Engine errors keep their code on `NozleAPIError`: `hold_not_found` (404), `hold_already_resolved` (409), `hold_ttl_invalid` (400). An invalid `ttl_seconds` or `status` raises `NozleValidationError` before any request.
+  - Types: `CreditHold`, `CreditHoldResult`, `CreditHoldFinalizeResult`, `CreditHoldList`, `CreditHoldStatus`, and `UsageHoldsNamespace`.
+- Balances gain `held`, the credits reserved by open holds and already left out of `available`: `CreditBalance.held`, `CreditBalanceSource.held`, and `EntityCreditBalance.held`, `entity_held` and `shared_held`. Engine before 2.34.0 does not send them.
+
+## 0.26.0 — 2026-10-31
+
+### Added
+
+- `Nozle.event_buffer(max_batch_size=500, flush_interval=5, max_queue_size=10000, max_attempts=3, on_error=None)` returns an `EventBuffer` that queues events and sends them through `track_batch()` from a daemon thread: when `max_batch_size` events wait, every `flush_interval` seconds, on `flush(timeout=None)`, on `close(timeout=None)` (also a context manager) and at process exit (an `atexit` handler with a 5 second timeout, removed by `close()`). `buffer.track()` takes the arguments of `track()`, makes no request and returns the `transaction_id` (generated as UUID v7 when missing and kept on every resend). Dropped events go to `on_error(error, events)` with an `EventBufferError` whose `code` is `buffer_full` (the queue is full; the new event is dropped), `rejected` (Engine refused it; not resent), `failed` (still failing after `max_attempts` flushes; after a flush with failures, size and timer flushes pause 1 s, doubling per consecutive failing flush up to 60 s, reset by a flush without failures, while `flush()`, `close()` and the exit hook do not wait) or `closed` (`track()` after `close()`); without a callback, a `NozleTrackingWarning`. The same names, defaults and codes as the Node and Go SDKs. Serverless code must call `flush()` or `close()` before returning. `AsyncNozle` has no buffer yet.
+- A batch call with `concurrency=1` (or one chunk) runs on the calling thread instead of a thread pool, so it also works during interpreter exit.
+
+### Known
+
+- The OpenAI and Anthropic wrappers and `capture_http_client()` still send each event on its own, not through a buffer.
+- The queue is kept in memory only.
+
 ## 0.25.0 — 2026-10-31
 
 ### Added

@@ -31,6 +31,36 @@
       "subscription"
     ]
   },
+  "Budget": {
+    "properties": [
+      "as_of",
+      "currency",
+      "feature_code",
+      "held",
+      "limit",
+      "mode",
+      "period",
+      "period_end",
+      "period_start",
+      "remaining",
+      "spent",
+      "status"
+    ],
+    "required": [
+      "as_of",
+      "currency",
+      "feature_code",
+      "held",
+      "limit",
+      "mode",
+      "period",
+      "period_end",
+      "period_start",
+      "remaining",
+      "spent",
+      "status"
+    ]
+  },
   "CostEventAccepted": {
     "properties": [
       "cost_event_id",
@@ -101,6 +131,7 @@
       "credit_system_id",
       "credit_system_name",
       "customer_id",
+      "held",
       "sources",
       "system_status",
       "unit_name"
@@ -112,6 +143,7 @@
       "credit_system_id",
       "credit_system_name",
       "customer_id",
+      "held",
       "sources",
       "system_status",
       "unit_name"
@@ -175,10 +207,13 @@
       "customer_id",
       "effective_available",
       "entity_available",
+      "entity_held",
       "entity_id",
       "entity_status",
+      "held",
       "pool_policy",
       "shared_available",
+      "shared_held",
       "sources",
       "system_status",
       "unit_name"
@@ -192,10 +227,13 @@
       "customer_id",
       "effective_available",
       "entity_available",
+      "entity_held",
       "entity_id",
       "entity_status",
+      "held",
       "pool_policy",
       "shared_available",
+      "shared_held",
       "sources",
       "system_status",
       "unit_name"
@@ -234,6 +272,7 @@
       "advisory",
       "allowed",
       "available",
+      "budget",
       "credit_system",
       "credits_required",
       "entity_id",
@@ -256,6 +295,7 @@
     "properties": [
       "allowed",
       "available",
+      "budget",
       "credit_system",
       "credits_consumed",
       "credits_required",
@@ -558,6 +598,7 @@
   "PlatformCanResponse": {
     "properties": [
       "allowed",
+      "budget",
       "configuration",
       "economics",
       "feature_type",

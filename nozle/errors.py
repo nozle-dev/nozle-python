@@ -1,10 +1,31 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Dict, Optional, Type
 
 #: The one code for a customer with no active subscription. Core's ``subscription_not_found``
 #: counts as the same case in :meth:`NozleAPIError.has_code`.
 NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found"
+
+
+class RefusalReason(str, Enum):
+    """Why ``can()``, ``usage.check()``, ``usage.track()`` or a hold answers ``allowed: False``
+    (its ``reason``), and the ``code`` of the LLM proxy's 402/429 refusals.
+
+    Members equal their string value, so compare
+    ``result["reason"] == RefusalReason.BUDGET_EXCEEDED``. Results keep the plain string, so a
+    reason a newer Engine adds still arrives.
+    """
+
+    FEATURE_NOT_FOUND = "feature_not_found"
+    NO_SUBSCRIPTION = "no_subscription"
+    SUBSCRIPTION_REQUIRED = "subscription_required"
+    NO_ENTITLEMENT = "no_entitlement"
+    USAGE_LIMIT_EXCEEDED = "usage_limit_exceeded"
+    ECONOMIC_POLICY_DENIED = "economic_policy_denied"
+    CUSTOMER_PAYMENT_OVERDUE = "customer_payment_overdue"
+    INSUFFICIENT_CREDITS = "insufficient_credits"
+    BUDGET_EXCEEDED = "budget_exceeded"
 
 
 class NozleError(Exception):
@@ -83,3 +104,28 @@ class NozleAPIError(NozleError):
             value == code or (isinstance(value, list) and code in value)
             for value in listed.values()
         )
+
+
+class BudgetExceededError(NozleAPIError):
+    """HTTP 402 ``budget_exceeded``: a hard spend limit is used up."""
+
+    @property
+    def budget(self) -> Optional[Dict[str, Any]]:
+        """The limit's standing (``limit``, ``spent``, ``held``, ``remaining``, ...), when sent."""
+        details = self.response_details
+        value = details.get("budget") if isinstance(details, dict) else None
+        return value if isinstance(value, dict) else None
+
+
+class UsageLimitExceededError(NozleAPIError):
+    """HTTP 429 ``usage_limit_exceeded``: a hard unit limit is reached."""
+
+
+def api_error_class(status_code: int, response_details: Any) -> Type[NozleAPIError]:
+    """The error class for a failed response, by status and exact ``code``."""
+    code = response_details.get("code") if isinstance(response_details, dict) else None
+    if status_code == 402 and code == RefusalReason.BUDGET_EXCEEDED.value:
+        return BudgetExceededError
+    if status_code == 429 and code == RefusalReason.USAGE_LIMIT_EXCEEDED.value:
+        return UsageLimitExceededError
+    return NozleAPIError

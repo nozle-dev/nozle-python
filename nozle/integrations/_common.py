@@ -48,7 +48,7 @@ def with_method(client: Any, path: tuple[str, ...], replacement: Any) -> Any:
 
 
 class NozleTrackingWarning(RuntimeWarning):
-    """A successful LLM response could not be reported to Nozle."""
+    """Usage could not be reported to Nozle: an LLM response's, or an event buffer's events."""
 
 
 @dataclass(frozen=True)

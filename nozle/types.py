@@ -63,7 +63,49 @@ class CanPolicy(TypedDict, total=False):
     reason: str
 
 
+BudgetPeriod = Literal["billing_period", "calendar_month", "lifetime"]
+BudgetMode = Literal["hard", "soft"]
+BudgetStatus = Literal["ok", "warning", "exceeded"]
+
+
+class Budget(TypedDict):
+    """One money budget (spend limit) and its standing in the current period (Engine 2.34.0+).
+
+    Amounts are decimal strings in major units of ``currency``.
+    """
+
+    #: The Feature the limit covers; ``None`` for the subscription's total limit.
+    feature_code: Optional[str]
+    limit: str
+    #: Gross metered usage charges booked this period.
+    spent: str
+    #: Spend reserved by open budget holds.
+    held: str
+    remaining: str
+    currency: str
+    period: BudgetPeriod
+    period_start: str
+    #: ``None`` for a ``lifetime`` limit.
+    period_end: Optional[str]
+    #: A ``soft`` limit never refuses.
+    mode: BudgetMode
+    #: ``warning`` once a threshold is reached, ``exceeded`` once spent plus held reaches the limit.
+    status: BudgetStatus
+    #: Time of the latest event booked into ``spent``; ``None`` before any.
+    as_of: Optional[str]
+
+
+class BudgetList(TypedDict):
+    """``budgets.list()``: every spend limit of the customer's subscription."""
+
+    customer_id: str
+    subscription_id: str
+    budgets: List[Budget]
+
+
 class CanResult(_CanResultRequired, total=False):
+    #: A :class:`~nozle.errors.RefusalReason` value when ``allowed`` is ``False``; unknown
+    #: reasons arrive as their string.
     reason: str
     feature_type: str
     configuration: Dict[str, str]
@@ -73,6 +115,9 @@ class CanResult(_CanResultRequired, total=False):
     overage: bool
     economics: CanEconomics
     policy: CanPolicy
+    #: The spend limit that refused the call (``budget_exceeded``), else the tightest one
+    #: covering the Feature (Engine 2.34.0+).
+    budget: Budget
 
 
 class _PlanRequired(TypedDict):
@@ -540,6 +585,8 @@ class CreditBalanceSource(TypedDict):
     subscription_id: Optional[str]
     initial: str
     remaining: str
+    #: Credits of this source reserved by open holds (Engine 2.34.0+).
+    held: str
     valid_from: str
     expires_at: Optional[str]
     priority: int
@@ -555,6 +602,8 @@ class CreditBalance(TypedDict):
     unit_name: str
     system_status: str
     available: str
+    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.34.0+).
+    held: str
     as_of: str
     sources: List[CreditBalanceSource]
 
@@ -688,6 +737,10 @@ class EntityCreditBalance(TypedDict):
     entity_available: str
     shared_available: str
     effective_available: str
+    entity_held: str
+    shared_held: str
+    #: Credits reserved by open holds on what this Entity can spend (Engine 2.34.0+).
+    held: str
     consumed: str
     pool_policy: Optional[EntityCreditPoolPolicy]
     as_of: str
@@ -765,6 +818,9 @@ class UsageCheckResult(_UsageCheckResultRequired, total=False):
     projected_remaining: str
     projected_deductions: List[UsageDeduction]
     reason: str
+    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.34.0+). Such a
+    #: refusal carries only ``allowed``, ``reason`` and ``budget``.
+    budget: Budget
 
 
 class _UsageTrackResultRequired(TypedDict):
@@ -783,6 +839,102 @@ class UsageTrackResult(_UsageTrackResultRequired, total=False):
     remaining: str
     reason: str
     deductions: List[UsageDeduction]
+    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.34.0+).
+    budget: Budget
+
+
+CreditHoldStatus = Literal["held", "denied", "finalized", "released", "expired"]
+
+
+class _CreditHoldRequired(TypedDict):
+    hold_id: str
+    status: CreditHoldStatus
+    customer_id: str
+    feature_code: str
+    credit_system: str
+    metric_amount: str
+    credits_required: str
+    #: ``0`` for a denied hold.
+    credits_held: str
+    expires_at: str
+    created_at: str
+    resolved_at: Optional[str]
+
+
+class CreditHold(_CreditHoldRequired, total=False):
+    """A credit balance hold: Engine ``GET /usage/holds/{id}``."""
+
+    entity_id: str
+    subscription_id: str
+    pool_policy: str
+    #: The consume operation a finalize wrote.
+    operation_id: str
+
+
+class _CreditHoldResultRequired(CreditHold):
+    allowed: bool
+    available: str
+
+
+class CreditHoldResult(_CreditHoldResultRequired, total=False):
+    """``usage.holds.create()``: a denial is ``allowed: False`` with ``status`` ``denied``."""
+
+    reason: str
+
+
+class CreditHoldFinalizeResult(UsageTrackResult):
+    """``usage.holds.finalize()``: the ``usage.track()`` result plus the hold's outcome."""
+
+    hold_id: str
+    hold_status: CreditHoldStatus
+    credits_held: str
+    credits_released: str
+    #: The hold had expired, so the finalize ran as a plain track.
+    hold_expired: bool
+
+
+class BudgetHold(TypedDict):
+    """A budget hold (Engine 2.34.0+): on a Feature billed in money under a hard spend limit, the
+    hold reserves the call's estimated spend. Tell it from a :class:`CreditHold` by ``kind``."""
+
+    kind: Literal["budget"]
+    hold_id: str
+    status: CreditHoldStatus
+    customer_id: str
+    subscription_id: str
+    feature_code: str
+    metric_amount: str
+    #: Spend reserved, in major units of ``currency``; ``0`` once released, expired or denied.
+    amount_held: str
+    currency: str
+    expires_at: str
+    created_at: str
+    resolved_at: Optional[str]
+
+
+class _BudgetHoldResultRequired(BudgetHold):
+    allowed: bool
+
+
+class BudgetHoldResult(_BudgetHoldResultRequired, total=False):
+    """``usage.holds.create()`` of a budget hold: ``reason`` ``budget_exceeded`` with ``budget``
+    when the estimated spend does not fit."""
+
+    reason: str
+    budget: Budget
+
+
+#: A credit hold, or a budget hold (``kind`` ``"budget"``).
+Hold = Union[CreditHold, BudgetHold]
+#: ``usage.holds.create()``.
+HoldResult = Union[CreditHoldResult, BudgetHoldResult]
+#: ``usage.holds.finalize()``: a budget hold's finalize returns the hold.
+HoldFinalizeResult = Union[CreditHoldFinalizeResult, BudgetHold]
+
+
+class CreditHoldList(TypedDict):
+    customer_id: str
+    holds: List[CreditHold]
 
 
 class _CustomerUsageRequired(TypedDict):

@@ -26,7 +26,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from nozle._operation import Async, M, Step, Steps, Sync, T, run_async, run_sync
-from nozle.errors import NozleAPIError, NozleTransportError
+from nozle.errors import NozleAPIError, NozleTransportError, RefusalReason, api_error_class
 
 if TYPE_CHECKING:
     import httpx
@@ -114,7 +114,8 @@ class BaseTransport(Generic[M]):
             body = None
 
         # Retry only a request that is safe to repeat: a read, a call with an Idempotency-Key, or a
-        # call the caller marks idempotent. Network errors, timeouts, 429 and 5xx are retried.
+        # call the caller marks idempotent. Network errors, timeouts, 429 and 5xx are retried,
+        # except a 429 usage_limit_exceeded (a refusal, see _is_refusal).
         safe = (
             method.upper() in ("GET", "HEAD") or idempotent or "Idempotency-Key" in request_headers
         )
@@ -125,16 +126,19 @@ class BaseTransport(Generic[M]):
     def _done(response: Any, attempt: int, retries: int) -> bool:
         if response is None:
             return False
+        if response.status_code == 429 and _is_refusal(response):
+            return True
         return not (response.status_code == 429 or response.status_code >= 500) or (
             attempt >= retries
         )
 
     def _result(self, operation: str, response: Any, expect_json: bool) -> Any:
         if not 200 <= response.status_code < 300:
-            raise NozleAPIError(
+            details = self._safe_response_details(response)
+            raise api_error_class(response.status_code, details)(
                 operation=operation,
                 status_code=response.status_code,
-                response_details=self._safe_response_details(response),
+                response_details=details,
                 request_id=response.headers.get("X-Request-Id") or None,
                 retry_after=_parse_retry_after(response.headers.get("Retry-After")),
             )
@@ -164,6 +168,16 @@ class BaseTransport(Generic[M]):
         except ValueError:
             details = response.text[:2048]
         return _sanitize(details, self._api_key)
+
+
+def _is_refusal(response: Any) -> bool:
+    """A 429 whose ``code`` is exactly ``usage_limit_exceeded``: a hard unit limit, not a rate
+    limit, which a retry cannot pass."""
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("code") == RefusalReason.USAGE_LIMIT_EXCEEDED.value
 
 
 class HttpTransport(BaseTransport[Sync]):
@@ -229,6 +243,9 @@ class HttpTransport(BaseTransport[Sync]):
 
     def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
         def run_all() -> List[Any]:
+            if min(concurrency, len(operations)) <= 1:
+                # No pool for one at a time; it also works at interpreter exit, which refuses pools.
+                return [run_sync(operation) for operation in operations]
             with ThreadPoolExecutor(max_workers=min(concurrency, len(operations))) as pool:
                 return list(pool.map(run_sync, operations))
 

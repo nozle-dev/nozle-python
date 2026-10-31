@@ -29,6 +29,7 @@ from nozle._validation import (
     validate_idempotency_key,
 )
 from nozle.alerts import AlertsNamespace
+from nozle.budgets import BudgetsNamespace
 from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
 from nozle.cost_intelligence import CostIntelligenceNamespace
@@ -39,6 +40,7 @@ from nozle.customers import CustomersNamespace
 from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
 from nozle.errors import NO_ACTIVE_SUBSCRIPTION, NozleAPIError, NozleValidationError
+from nozle.event_buffer import EventBuffer, OnError
 from nozle.events import EventsNamespace
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
@@ -145,6 +147,7 @@ class _BaseNozle(Resource[M]):
         self.entities = EntitiesNamespace(self._engine, self.api_key)
         self.entity_subscriptions = EntitySubscriptionsNamespace(self._events, self.api_key)
         self.usage = UsageNamespace(self._engine, self.api_key)
+        self.budgets = BudgetsNamespace(self._engine, self.api_key)
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
         self.credit_notes = CreditNotesNamespace(self._events, self.api_key)
@@ -1033,6 +1036,31 @@ class Nozle(_BaseNozle[Sync]):
         from nozle.integrations.capture import capture_http_client
 
         return capture_http_client(self, **options)
+
+    def event_buffer(
+        self,
+        *,
+        max_batch_size: int = 500,
+        flush_interval: float = 5.0,
+        max_queue_size: int = 10_000,
+        max_attempts: int = 3,
+        on_error: Optional[OnError] = None,
+    ) -> EventBuffer:
+        """Return a buffer that sends events through ``track_batch()`` in the background.
+
+        ``buffer.track(...)`` takes the arguments of ``track()``, makes no request and returns the
+        ``transaction_id``. A batch goes when ``max_batch_size`` (1 to 5000) events wait, every
+        ``flush_interval`` seconds (0: no timer), on ``flush()``, ``close()`` and at exit. See
+        :class:`nozle.event_buffer.EventBuffer`.
+        """
+        return EventBuffer(
+            self,
+            max_batch_size=max_batch_size,
+            flush_interval=flush_interval,
+            max_queue_size=max_queue_size,
+            max_attempts=max_attempts,
+            on_error=on_error,
+        )
 
     def close(self) -> None:
         if self._owns_session:
