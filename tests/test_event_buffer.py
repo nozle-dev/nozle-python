@@ -355,3 +355,59 @@ def test_invalid_events_raise_before_queueing() -> None:
 def test_a_publishable_key_cannot_buffer() -> None:
     with pytest.raises(NozleValidationError):
         Nozle("pk_test").event_buffer()
+
+
+def test_an_outage_pauses_automatic_flushes_and_keeps_the_events(
+    monkeypatch: pytest.MonkeyPatch, requests_mock: requests_mock.Mocker
+) -> None:
+    monkeypatch.setattr(nozle.event_buffer, "BACKOFF_INITIAL", 0.2)
+    recovered = threading.Event()
+
+    def engine(request: Any, context: Any) -> Dict[str, Any]:
+        context.status_code = 200 if recovered.is_set() else 503
+        return {"events": []}
+
+    requests_mock.post(BATCH, json=engine)
+    reports: Reports = []
+    buf = buffer(reports, flush_interval=0.02, max_attempts=3)
+    a = buf.track("c1", "api_call")
+    until(lambda: requests_mock.call_count == 2)  # a timer flush, then one after a 0.2 s pause
+    time.sleep(0.1)  # five flush intervals inside the 0.4 s pause: no flush, nothing dropped
+    assert requests_mock.call_count == 2 and reports == [] and buf._backoff == 0.4
+    recovered.set()
+    until(lambda: requests_mock.call_count == 3)
+    assert batches(requests_mock) == [[a], [a], [a]] and reports == []
+    until(lambda: buf._backoff == 0)  # a flush without failures resets the pause
+    assert buf.close(timeout=3)
+
+
+def test_the_size_trigger_waits_for_the_backoff_but_flush_does_not(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.post(BATCH, [{"status_code": 503, "json": {}}, {"json": {"events": []}}])
+    reports: Reports = []
+    buf = buffer(reports, max_batch_size=2)
+    a, b = buf.track("c1", "api_call"), buf.track("c1", "api_call")
+    until(lambda: requests_mock.call_count == 1 and buf.size == 2)  # failed, queued again
+    c = buf.track("c1", "api_call")  # 3 waiting, above max_batch_size, during a 1 s pause
+    time.sleep(0.2)
+    assert requests_mock.call_count == 1
+    assert buf.flush(timeout=3)
+    assert batches(requests_mock) == [[a, b], [a, b], [c]] and reports == []
+    assert buf.close(timeout=3)
+
+
+def test_the_backoff_doubles_up_to_its_cap(
+    monkeypatch: pytest.MonkeyPatch, requests_mock: requests_mock.Mocker
+) -> None:
+    monkeypatch.setattr(nozle.event_buffer, "BACKOFF_MAX", 3.0)
+    requests_mock.post(BATCH, status_code=503, json={})
+    reports: Reports = []
+    buf = buffer(reports, max_attempts=10)
+    buf.track("c1", "api_call")
+    pauses = []
+    for _ in range(4):
+        assert buf.flush(timeout=3)
+        pauses.append(buf._backoff)
+    assert pauses == [1.0, 2.0, 3.0, 3.0]
+    assert buf.close(timeout=10)

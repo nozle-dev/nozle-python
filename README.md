@@ -593,6 +593,11 @@ with nozle.event_buffer() as buffer:  # or close it with a with block
     flushes (`error.__cause__` is the last request error). A failed event goes back to the
     front of the queue for the next flush, with the same `transaction_id`. One report per flush.
   - `closed`: `track()` after `close()`.
+- **Backoff.** After a flush in which any event failed, the size and timer flushes pause for
+  1 second, doubling after each further flush with failures, up to 60 seconds; a flush without
+  failures ends the pause. Events keep queueing meanwhile (up to `max_queue_size`), so an
+  outage longer than a few flush intervals does not use up `max_attempts`. `flush()`,
+  `close()` and the exit hook send at once, without waiting for the pause.
 - **Invalid events** (a missing `customer_id` or `event`, a bad `timestamp`) raise
   `NozleValidationError` from `track()`, before they are queued.
 - **Exit.** The worker is a daemon thread. An `atexit` handler flushes with a 5 second timeout

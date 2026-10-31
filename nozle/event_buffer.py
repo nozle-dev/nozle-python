@@ -5,7 +5,7 @@ import threading
 import time
 import warnings
 from collections import deque
-from typing import TYPE_CHECKING, Callable, Deque, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Callable, Deque, Dict, List, Optional, Tuple, Union
 
 from nozle._validation import require_non_empty, require_secret_key
 from nozle.errors import NozleError, NozleValidationError
@@ -24,6 +24,10 @@ DEFAULT_MAX_QUEUE_SIZE = 10_000
 DEFAULT_MAX_ATTEMPTS = 3
 #: How long the ``atexit`` handler waits for the last flush.
 EXIT_FLUSH_TIMEOUT = 5.0
+#: After a flush with failed events, size and timer flushes pause this long, doubling per
+#: consecutive such flush up to BACKOFF_MAX; a flush without failures resets it.
+BACKOFF_INITIAL = 1.0
+BACKOFF_MAX = 60.0
 
 BUFFER_FULL = "buffer_full"
 REJECTED = "rejected"
@@ -113,6 +117,9 @@ class EventBuffer:
         self._done = 0
         self._closing = False
         self._finished = False
+        # Seconds of the current pause of automatic flushes after failures (0: none), and its end.
+        self._backoff = 0.0
+        self._paused_until = 0.0
         self._worker = threading.Thread(target=self._run, name="nozle-event-buffer", daemon=True)
         self._worker.start()
         atexit.register(self._at_exit)
@@ -222,24 +229,25 @@ class EventBuffer:
         deadline = time.monotonic() + interval
         while True:
             with self._cond:
-                while not (
-                    self._closing
-                    or self._requested > self._done
-                    or len(self._queue) >= self._max_batch_size
-                    or (interval and time.monotonic() >= deadline)
-                ):
-                    self._cond.wait(max(deadline - time.monotonic(), 0) if interval else None)
+                while not self._due(deadline):
+                    self._cond.wait(self._wait_time(deadline))
                 serving = self._requested
                 closing = self._closing
                 snapshot = list(self._queue)
                 self._queue.clear()
                 self._in_flight = snapshot
-            back = self._send(snapshot)
+            back, failed = self._send(snapshot)
             with self._cond:
                 self._queue.extendleft(reversed(back))
                 self._in_flight = []
                 self._done = serving
-                deadline = time.monotonic() + interval
+                now = time.monotonic()
+                deadline = now + interval
+                if failed:
+                    self._backoff = min(self._backoff * 2 or BACKOFF_INITIAL, BACKOFF_MAX)
+                    self._paused_until = now + self._backoff
+                else:
+                    self._backoff = self._paused_until = 0.0
                 # Closing ends once nothing is left: a failing event is dropped after max_attempts.
                 if closing and not self._queue:
                     self._finished = True
@@ -247,8 +255,28 @@ class EventBuffer:
                 if self._finished:
                     return
 
-    def _send(self, snapshot: List[_Pending]) -> List[_Pending]:
-        """Send ``snapshot`` in batches; return the events to queue again, in order."""
+    def _due(self, deadline: float) -> bool:
+        """Whether the worker sends now. Called with the lock held."""
+        if self._closing or self._requested > self._done:
+            return True  # flush(), close() and the exit hook do not wait for the backoff
+        now = time.monotonic()
+        if now < self._paused_until:
+            return False
+        timer = bool(self._flush_interval) and now >= deadline
+        return timer or len(self._queue) >= self._max_batch_size
+
+    def _wait_time(self, deadline: float) -> Optional[float]:
+        """Seconds until the next automatic flush could be due; None: until notified."""
+        wakes = []
+        if self._flush_interval:
+            wakes.append(max(deadline, self._paused_until))
+        if len(self._queue) >= self._max_batch_size:
+            wakes.append(self._paused_until)
+        return max(min(wakes) - time.monotonic(), 0) if wakes else None
+
+    def _send(self, snapshot: List[_Pending]) -> Tuple[List[_Pending], bool]:
+        """Send ``snapshot`` in batches. Return the events to queue again, in order, and whether
+        any event failed."""
         retry: List[_Pending] = []
         gave_up: List[_Pending] = []
         cause: Optional[Exception] = None
@@ -287,7 +315,7 @@ class EventBuffer:
             message = f"{len(gave_up)} events failed after {self._max_attempts} attempts"
             failure = EventBufferError(FAILED, message, cause=cause)
             self._report(failure, [pending.event for pending in gave_up])
-        return retry + repeats
+        return retry + repeats, bool(retry or gave_up)
 
     def _report(self, error: EventBufferError, events: List[TrackBatchEvent]) -> None:
         if self._on_error is not None:
