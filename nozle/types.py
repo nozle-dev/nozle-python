@@ -585,7 +585,7 @@ class CreditBalanceSource(TypedDict):
     subscription_id: Optional[str]
     initial: str
     remaining: str
-    #: Credits of this source reserved by open holds (Engine 2.33.0+).
+    #: Credits of this source reserved by open holds (Engine 2.34.0+).
     held: str
     valid_from: str
     expires_at: Optional[str]
@@ -602,7 +602,7 @@ class CreditBalance(TypedDict):
     unit_name: str
     system_status: str
     available: str
-    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.33.0+).
+    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.34.0+).
     held: str
     as_of: str
     sources: List[CreditBalanceSource]
@@ -739,7 +739,7 @@ class EntityCreditBalance(TypedDict):
     effective_available: str
     entity_held: str
     shared_held: str
-    #: Credits reserved by open holds on what this Entity can spend (Engine 2.33.0+).
+    #: Credits reserved by open holds on what this Entity can spend (Engine 2.34.0+).
     held: str
     consumed: str
     pool_policy: Optional[EntityCreditPoolPolicy]

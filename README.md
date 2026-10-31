@@ -358,7 +358,7 @@ consumption = nozle.usage.track(
 #### Credit holds
 
 When the cost is known only after the work (an LLM call, an agent run), reserve credits first,
-then finalize with the actual usage or release them. Needs Engine 2.33.0. Held credits are left out
+then finalize with the actual usage or release them. Needs Engine 2.34.0. Held credits are left out
 of `available` for every other caller, and balances report them as `held`.
 
 ```python
