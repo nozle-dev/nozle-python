@@ -23,6 +23,7 @@ from nozle.integrations.openai import wrap_openai
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
 from nozle.plan_versions import PlanVersionsNamespace
+from nozle.track_batch import TrackBatchEventResult, TrackBatchResult
 from nozle.types import (
     Alert,
     AlertPage,
@@ -122,6 +123,7 @@ from nozle.types import (
     SubscriptionTransitionRefundMode,
     SubscriptionTransitionResult,
     SubscriptionTransitionTiming,
+    TrackBatchEvent,
     TrackOptions,
     UsageCheckResult,
     UsageDeduction,
@@ -255,6 +257,9 @@ __all__ = [
     "SubscriptionTransitionProrationBehavior",
     "SubscriptionTransitionTiming",
     "SubscribeResult",
+    "TrackBatchEvent",
+    "TrackBatchEventResult",
+    "TrackBatchResult",
     "TrackOptions",
     "UsageCheckResult",
     "UsageDeduction",

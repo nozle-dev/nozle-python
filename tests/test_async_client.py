@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import gzip
 import hashlib
 import hmac
 import json
@@ -51,7 +52,7 @@ UNIVERSAL: Dict[str, Any] = {
     "credit_balance_import": {"replayed": False},
     "billing_state_import": {"replayed": True},
 }
-HEADERS = ("authorization", "content-type", "idempotency-key")
+HEADERS = ("authorization", "content-type", "content-encoding", "idempotency-key")
 Sent = Tuple[str, str, List[Tuple[str, str]], Any, Dict[str, str]]
 
 
@@ -61,7 +62,9 @@ def _sent(method: str, url: str, body: bytes, headers: Any) -> Sent:
         method,
         f"{parts.scheme}://{parts.netloc}{parts.path}",
         sorted(parse_qsl(parts.query)),
-        json.loads(body) if body else None,
+        json.loads(gzip.decompress(body) if headers.get("content-encoding") == "gzip" else body)
+        if body
+        else None,
         {name: headers[name] for name in HEADERS if name in headers},
     )
 
@@ -81,6 +84,9 @@ TRANSITION = {"customer_id": "cust", "subscription_id": "sub_1", "operation": "u
 STAMP = "2026-10-15T10:00:00Z"
 CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.track("cust", "api_calls", {"tokens": 1}, transaction_id="t1", timestamp=STAMP),
+    lambda n: n.track_batch(
+        [{"customer_id": "cust", "event": "api_calls", "transaction_id": "t2", "timestamp": STAMP}]
+    ),
     lambda n: n.can("cust", "export", {"plan": "pro"}),
     lambda n: n.plans(),
     lambda n: n.ping(),
