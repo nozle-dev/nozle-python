@@ -139,7 +139,7 @@ class UsageHoldsNamespace(Resource[M]):
     """Reserve credits before work whose cost is known after it, then finalize or release.
 
     On a Feature billed in money under a hard spend limit, a hold is a budget hold
-    (``kind`` ``"budget"``, Engine 2.31.0+) that reserves the call's estimated spend.
+    (``kind`` ``"budget"``, Engine 2.34.0+) that reserves the call's estimated spend.
     """
 
     def __init__(

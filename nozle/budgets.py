@@ -8,7 +8,7 @@ from nozle.types import BudgetList
 
 
 class BudgetsNamespace(Resource[M]):
-    """Read money budgets (spend limits) and their standing (Engine 2.31.0+)."""
+    """Read money budgets (spend limits) and their standing (Engine 2.34.0+)."""
 
     @endpoint
     def list(self, customer_id: str, *, subscription_id: Optional[str] = None) -> Steps[BudgetList]:

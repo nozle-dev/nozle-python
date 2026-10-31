@@ -69,7 +69,7 @@ BudgetStatus = Literal["ok", "warning", "exceeded"]
 
 
 class Budget(TypedDict):
-    """One money budget (spend limit) and its standing in the current period (Engine 2.31.0+).
+    """One money budget (spend limit) and its standing in the current period (Engine 2.34.0+).
 
     Amounts are decimal strings in major units of ``currency``.
     """
@@ -116,7 +116,7 @@ class CanResult(_CanResultRequired, total=False):
     economics: CanEconomics
     policy: CanPolicy
     #: The spend limit that refused the call (``budget_exceeded``), else the tightest one
-    #: covering the Feature (Engine 2.31.0+).
+    #: covering the Feature (Engine 2.34.0+).
     budget: Budget
 
 
@@ -585,7 +585,7 @@ class CreditBalanceSource(TypedDict):
     subscription_id: Optional[str]
     initial: str
     remaining: str
-    #: Credits of this source reserved by open holds (Engine 2.30.0+).
+    #: Credits of this source reserved by open holds (Engine 2.33.0+).
     held: str
     valid_from: str
     expires_at: Optional[str]
@@ -602,7 +602,7 @@ class CreditBalance(TypedDict):
     unit_name: str
     system_status: str
     available: str
-    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.30.0+).
+    #: Credits reserved by open holds, already subtracted from ``available`` (Engine 2.33.0+).
     held: str
     as_of: str
     sources: List[CreditBalanceSource]
@@ -739,7 +739,7 @@ class EntityCreditBalance(TypedDict):
     effective_available: str
     entity_held: str
     shared_held: str
-    #: Credits reserved by open holds on what this Entity can spend (Engine 2.30.0+).
+    #: Credits reserved by open holds on what this Entity can spend (Engine 2.33.0+).
     held: str
     consumed: str
     pool_policy: Optional[EntityCreditPoolPolicy]
@@ -818,7 +818,7 @@ class UsageCheckResult(_UsageCheckResultRequired, total=False):
     projected_remaining: str
     projected_deductions: List[UsageDeduction]
     reason: str
-    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.31.0+). Such a
+    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.34.0+). Such a
     #: refusal carries only ``allowed``, ``reason`` and ``budget``.
     budget: Budget
 
@@ -839,7 +839,7 @@ class UsageTrackResult(_UsageTrackResultRequired, total=False):
     remaining: str
     reason: str
     deductions: List[UsageDeduction]
-    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.31.0+).
+    #: The used-up hard spend limit, with ``reason`` ``budget_exceeded`` (Engine 2.34.0+).
     budget: Budget
 
 
@@ -894,7 +894,7 @@ class CreditHoldFinalizeResult(UsageTrackResult):
 
 
 class BudgetHold(TypedDict):
-    """A budget hold (Engine 2.31.0+): on a Feature billed in money under a hard spend limit, the
+    """A budget hold (Engine 2.34.0+): on a Feature billed in money under a hard spend limit, the
     hold reserves the call's estimated spend. Tell it from a :class:`CreditHold` by ``kind``."""
 
     kind: Literal["budget"]
