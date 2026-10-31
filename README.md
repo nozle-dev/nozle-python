@@ -391,6 +391,30 @@ the hold open. A finalize after expiry runs as a plain `usage.track()` with `hol
 Finalizing with 0 releases the hold. `release()` is idempotent; a finalized hold answers 409
 `hold_already_resolved`, and an unknown one 404 `hold_not_found`.
 
+#### Money budgets
+
+Spend limits (Core) cap what a customer's metered usage may cost per period. Needs Engine 2.31.0.
+
+```python
+from nozle import RefusalReason
+
+decision = nozle.can("customer-123", "agent_execution")
+if not decision["allowed"] and decision["reason"] == RefusalReason.BUDGET_EXCEEDED:
+    budget = decision["budget"]  # limit, spent, held, remaining, currency, period_end, status, ...
+
+budgets = nozle.budgets.list("customer-123", subscription_id="sub-123")["budgets"]
+```
+
+`can()`, `usage.check()` and `usage.track()` answer `allowed: False`, `reason: "budget_exceeded"`
+with `budget` when a hard limit covering the Feature is used up; a soft limit never refuses.
+`RefusalReason` members equal their string, and an unknown reason arrives as its plain string.
+A plain `can()` is check-then-call, so calls in flight can overrun a cap; for an exact cap take a
+hold: on a Feature billed in money `usage.holds.create()` returns a budget hold (`kind: "budget"`,
+`amount_held`, `currency`) and refuses with `budget_exceeded` when the estimated spend does not fit.
+Where a failed response raises, a 402 `budget_exceeded` is `BudgetExceededError` (with `.budget`
+when sent) and a 429 `usage_limit_exceeded` is `UsageLimitExceededError`; both subclass
+`NozleAPIError`. Through the LLM proxy the provider SDK's own error carries the same `code`.
+
 The SDK retries up to 2 times by default (`max_retries=0` disables), and only calls that are safe to
 repeat: reads, and calls with an idempotency key or that are idempotent by id. It never retries other
 mutation requests. Retry only with the same

@@ -26,7 +26,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from nozle._operation import Async, M, Step, Steps, Sync, T, run_async, run_sync
-from nozle.errors import NozleAPIError, NozleTransportError
+from nozle.errors import NozleAPIError, NozleTransportError, api_error_class
 
 if TYPE_CHECKING:
     import httpx
@@ -131,10 +131,11 @@ class BaseTransport(Generic[M]):
 
     def _result(self, operation: str, response: Any, expect_json: bool) -> Any:
         if not 200 <= response.status_code < 300:
-            raise NozleAPIError(
+            details = self._safe_response_details(response)
+            raise api_error_class(response.status_code, details)(
                 operation=operation,
                 status_code=response.status_code,
-                response_details=self._safe_response_details(response),
+                response_details=details,
                 request_id=response.headers.get("X-Request-Id") or None,
                 retry_after=_parse_retry_after(response.headers.get("Retry-After")),
             )

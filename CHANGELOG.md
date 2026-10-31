@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.28.0 — 2026-10-31
+
+Needs Engine 2.31.0 for budgets.
+
+### Added
+
+- Money budgets (NLD-16) on `Nozle` and `AsyncNozle`.
+  - `budgets.list(customer_id, *, subscription_id=None)` reads `GET /customers/{id}/budgets` and returns `{customer_id, subscription_id, budgets}`: every spend limit of the subscription with its spend, open holds and status in the current period. `Budget` has `feature_code` (`None` for the total limit), `limit`, `spent`, `held`, `remaining` (decimal strings in major units), `currency`, `period` (`billing_period`, `calendar_month`, `lifetime`), `period_start`, `period_end`, `mode` (`hard`, `soft`), `status` (`ok`, `warning`, `exceeded`) and `as_of`. Types: `Budget`, `BudgetList`, `BudgetPeriod`, `BudgetMode`, `BudgetStatus`, and `BudgetsNamespace`.
+  - `CanResult`, `UsageCheckResult` and `UsageTrackResult` gain `budget`: `can()`, `usage.check()` and `usage.track()` answer `allowed: False`, `reason: "budget_exceeded"` with the used-up limit. They still return the refusal; nothing raises.
+  - `RefusalReason` (`str` enum): `FEATURE_NOT_FOUND`, `NO_SUBSCRIPTION`, `SUBSCRIPTION_REQUIRED`, `NO_ENTITLEMENT`, `USAGE_LIMIT_EXCEEDED`, `ECONOMIC_POLICY_DENIED`, `CUSTOMER_PAYMENT_OVERDUE`, `INSUFFICIENT_CREDITS`, `BUDGET_EXCEEDED`. Members equal their string; results keep the plain string, so an unknown reason passes through.
+  - `BudgetExceededError` (HTTP 402 `budget_exceeded`, with `.budget` when the response carries it) and `UsageLimitExceededError` (HTTP 429 `usage_limit_exceeded`), subclasses of `NozleAPIError` chosen by status and exact `code` wherever a failed response raises.
+  - Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `BudgetHold` (`kind: "budget"`, `amount_held`, `currency`) and `BudgetHoldResult` (with `reason` `budget_exceeded` and `budget` when it does not fit). `create()` returns `HoldResult`, `finalize()` `HoldFinalizeResult` (a budget hold's finalize returns the hold), `release()` and `get()` `Hold`: unions of the credit and budget shapes.
+- `tests/contract/openapi_schemas.json` gains `Budget` and the `budget` keys by hand until nozle-openapi.yaml documents them.
+
 ## 0.27.0 — 2026-10-31
 
 ### Added

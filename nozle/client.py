@@ -29,6 +29,7 @@ from nozle._validation import (
     validate_idempotency_key,
 )
 from nozle.alerts import AlertsNamespace
+from nozle.budgets import BudgetsNamespace
 from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
 from nozle.cost_intelligence import CostIntelligenceNamespace
@@ -146,6 +147,7 @@ class _BaseNozle(Resource[M]):
         self.entities = EntitiesNamespace(self._engine, self.api_key)
         self.entity_subscriptions = EntitySubscriptionsNamespace(self._events, self.api_key)
         self.usage = UsageNamespace(self._engine, self.api_key)
+        self.budgets = BudgetsNamespace(self._engine, self.api_key)
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
         self.credit_notes = CreditNotesNamespace(self._events, self.api_key)

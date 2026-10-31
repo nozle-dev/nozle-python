@@ -1,5 +1,6 @@
 from nozle._version import __version__
 from nozle.alerts import AlertsNamespace
+from nozle.budgets import BudgetsNamespace
 from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
 from nozle.cost_intelligence import CostIntelligenceNamespace
@@ -21,11 +22,14 @@ from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
 from nozle.errors import (
     NO_ACTIVE_SUBSCRIPTION,
+    BudgetExceededError,
     NozleAPIError,
     NozleAuthenticationError,
     NozleError,
     NozleTransportError,
     NozleValidationError,
+    RefusalReason,
+    UsageLimitExceededError,
 )
 from nozle.event_buffer import EventBuffer, EventBufferError
 from nozle.events import EventsNamespace
@@ -42,6 +46,13 @@ from nozle.types import (
     BillingStateImport,
     BillingStateImportRequest,
     BillingStateImportSubscription,
+    Budget,
+    BudgetHold,
+    BudgetHoldResult,
+    BudgetList,
+    BudgetMode,
+    BudgetPeriod,
+    BudgetStatus,
     CancellationPolicy,
     CancelSubscriptionResult,
     CanResult,
@@ -96,6 +107,9 @@ from nozle.types import (
     EntitySubscriptionCheckoutManyResult,
     EntitySubscriptionList,
     EntitySubscriptionPlan,
+    Hold,
+    HoldFinalizeResult,
+    HoldResult,
     HostedCheckoutResult,
     Invoice,
     InvoicePage,
@@ -186,6 +200,20 @@ __all__ = [
     "AlertPage",
     "AlertsNamespace",
     "AsyncNozle",
+    "Budget",
+    "BudgetExceededError",
+    "BudgetHold",
+    "BudgetHoldResult",
+    "BudgetList",
+    "BudgetMode",
+    "BudgetPeriod",
+    "BudgetStatus",
+    "BudgetsNamespace",
+    "Hold",
+    "HoldFinalizeResult",
+    "HoldResult",
+    "RefusalReason",
+    "UsageLimitExceededError",
     "CANNOT_REFUND_UNPAID_INVOICE",
     "DOES_NOT_MATCH_ITEM_AMOUNTS",
     "HIGHER_THAN_REMAINING_FEE_AMOUNT",

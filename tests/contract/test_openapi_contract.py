@@ -18,6 +18,7 @@ CONTRACT = {
     "UsageTrackResult": "CreditsUsageTrackResponse",
     "UsageCheckResult": "CreditsUsageCheckResponse",
     "CanResult": "PlatformCanResponse",
+    "Budget": "Budget",
     "PingResult": "PlatformPingResponse",
     "CostEventAccepted": "CostEventAccepted",
     "CreditBalance": "CreditsCustomerBalance",

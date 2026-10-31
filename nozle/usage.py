@@ -15,11 +15,11 @@ from nozle._validation import (
 )
 from nozle.errors import NozleValidationError
 from nozle.types import (
-    CreditHold,
-    CreditHoldFinalizeResult,
     CreditHoldList,
-    CreditHoldResult,
     CreditHoldStatus,
+    Hold,
+    HoldFinalizeResult,
+    HoldResult,
     JSONMapping,
     UsageCheckResult,
     UsageTrackResult,
@@ -136,7 +136,11 @@ class UsageNamespace(Resource[M]):
 
 
 class UsageHoldsNamespace(Resource[M]):
-    """Reserve credits before work whose cost is known after it, then finalize or release."""
+    """Reserve credits before work whose cost is known after it, then finalize or release.
+
+    On a Feature billed in money under a hard spend limit, a hold is a budget hold
+    (``kind`` ``"budget"``, Engine 2.31.0+) that reserves the call's estimated spend.
+    """
 
     def __init__(
         self,
@@ -159,7 +163,7 @@ class UsageHoldsNamespace(Resource[M]):
         properties: Optional[JSONMapping] = None,
         timestamp: Optional[str] = None,
         ttl_seconds: Optional[int] = None,
-    ) -> Steps[CreditHoldResult]:
+    ) -> Steps[HoldResult]:
         operation = "usage.holds.create"
         require_secret_key(self._api_key, operation)
         UsageNamespace._validate(customer_id, entity_id, feature_code, operation)
@@ -185,7 +189,7 @@ class UsageHoldsNamespace(Resource[M]):
         if ttl_seconds is not None:
             body["ttl_seconds"] = ttl_seconds
         return cast(
-            CreditHoldResult,
+            HoldResult,
             (
                 yield self._transport.call(
                     operation,
@@ -204,7 +208,7 @@ class UsageHoldsNamespace(Resource[M]):
         *,
         properties: Optional[JSONMapping] = None,
         timestamp: Optional[str] = None,
-    ) -> Steps[CreditHoldFinalizeResult]:
+    ) -> Steps[HoldFinalizeResult]:
         operation = "usage.holds.finalize"
         require_secret_key(self._api_key, operation)
         require_non_empty(hold_id, "hold_id", operation)
@@ -214,7 +218,7 @@ class UsageHoldsNamespace(Resource[M]):
             "timestamp": timestamp or self._timestamp_for(f"hold:{hold_id}"),
         }
         return cast(
-            CreditHoldFinalizeResult,
+            HoldFinalizeResult,
             (
                 yield self._transport.call(
                     operation,
@@ -227,12 +231,12 @@ class UsageHoldsNamespace(Resource[M]):
         )
 
     @endpoint
-    def release(self, hold_id: str) -> Steps[CreditHold]:
+    def release(self, hold_id: str) -> Steps[Hold]:
         operation = "usage.holds.release"
         require_secret_key(self._api_key, operation)
         require_non_empty(hold_id, "hold_id", operation)
         return cast(
-            CreditHold,
+            Hold,
             (
                 yield self._transport.call(
                     operation, "POST", f"{self._path(hold_id)}/release", idempotent=True
@@ -241,11 +245,11 @@ class UsageHoldsNamespace(Resource[M]):
         )
 
     @endpoint
-    def get(self, hold_id: str) -> Steps[CreditHold]:
+    def get(self, hold_id: str) -> Steps[Hold]:
         operation = "usage.holds.get"
         require_secret_key(self._api_key, operation)
         require_non_empty(hold_id, "hold_id", operation)
-        return cast(CreditHold, (yield self._transport.call(operation, "GET", self._path(hold_id))))
+        return cast(Hold, (yield self._transport.call(operation, "GET", self._path(hold_id))))
 
     @endpoint
     def list(
