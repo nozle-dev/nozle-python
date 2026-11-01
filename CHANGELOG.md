@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.29.0 — 2026-11-01
+
+### Added
+
+- `AsyncNozle.event_buffer(max_batch_size=500, flush_interval=5, max_queue_size=10000, max_attempts=3, on_error=None)` returns an `AsyncEventBuffer` (NLD-23): the sync buffer's options, defaults, triggers, retries, backoff (1 s doubling to 60 s) and error codes (`buffer_full`, `rejected`, `failed`, `closed`), sent through `track_batch()` from an asyncio task instead of a thread. `buffer.track()` is not awaited (it makes no request) and is called from the event loop's thread; the task starts with the first `track()` made inside a running loop, or with `flush()`, and again on a new loop (one buffer can serve a handler that runs `asyncio.run()` per call; a request cut off when a loop ended is resent with the same `transaction_id`). `await buffer.flush(timeout=None)` and `await buffer.close(timeout=None)` return True when done, False on timeout; `async with` closes it. No event loop runs at process exit, so events still queued then are reported as `failed` instead of sent: `await close()` (or `flush()`) before the loop ends.
+- `wrap_openai()`, `wrap_anthropic()`, `wrap_http_client()` and `capture_http_client()`/`capture_async_http_client()` (also through `nozle.wrap_http_client(...)`) take `buffer=`, an `EventBuffer` or `AsyncEventBuffer`. The usage event of each LLM response then goes through the buffer and is delivered by its `flush()`, `close()` or exit hook; the HTTP capture queues it as the response ends, on the caller's thread or event loop, so a `flush()` right after the call includes it. Cost events (`cost_meter_code`) and the one-time Feature check are still sent on their own. Without `buffer=` nothing changes. Like `track_batch()`, a buffered usage event makes no subscription lookup.
+- `AsyncEventBuffer` is exported from `nozle`.
+
 ## 0.28.0 — 2026-11-01
 
 0.26.0 (event buffer) and 0.27.0 (credit holds) below were not published separately: their changes ship in 0.28.0.

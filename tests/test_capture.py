@@ -404,3 +404,56 @@ def test_existing_feature_or_failed_check_stays_silent() -> None:
 
         time.sleep(0.05)
         assert errors == []
+
+
+def test_with_a_buffer_the_usage_event_is_queued_before_the_response_returns() -> None:
+    nozle = tracker()
+    buffer = SimpleNamespace(track=Mock(return_value="queued"))
+    body = {"id": "c9", "model": "gpt-x", "usage": {"prompt_tokens": 4, "completion_tokens": 2}}
+    client = capture_http_client(
+        nozle,
+        customer_id="cust_1",
+        cost_meter_code="ai_tokens",
+        buffer=buffer,
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
+    )
+
+    assert client.post("https://api.openai.com/v1/chat/completions", json={}).json() == body
+    # Queued on this thread, so a flush right after the call already has it.
+    buffer.track.assert_called_once()
+    assert buffer.track.call_args.args == ("cust_1", "llm_tokens")
+    assert buffer.track.call_args.kwargs["transaction_id"] == "llm-openai-c9"
+    assert not nozle.track.called
+    wait_for(nozle.cost_events.track)  # cost events still go from the background
+    assert nozle.cost_events.track.call_args.kwargs["parent_transaction_id"] == "llm-openai-c9"
+
+
+@pytest.mark.asyncio
+async def test_async_capture_with_an_async_buffer_queues_on_the_event_loop() -> None:
+    from nozle import AsyncNozle
+
+    batches: list = []
+
+    def engine(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/events/batch"):
+            import gzip
+
+            batches.append(json.loads(gzip.decompress(request.content))["events"])
+        return httpx.Response(200, json={"events": []})
+
+    nozle = AsyncNozle(
+        "sk_test",
+        base_url="https://api.example/engine",
+        events_url="https://api.example/core",
+        _client=httpx.AsyncClient(transport=httpx.MockTransport(engine)),
+    )
+    body = {"id": "c5", "usage": {"prompt_tokens": 5, "completion_tokens": 1}}
+    async with nozle.event_buffer(flush_interval=0) as buffer:
+        client = nozle.capture_async_http_client(
+            customer_id="cust_1",
+            buffer=buffer,
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
+        )
+        await client.post("https://api.openai.com/v1/chat/completions", json={})
+        assert buffer.size == 1
+    assert [e["transaction_id"] for batch in batches for e in batch] == ["llm-openai-c5"]

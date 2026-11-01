@@ -6,7 +6,8 @@ record the token usage of each successful LLM response. ``capture_http_client`` 
 client the same way. Requests pass through unchanged. Usage is recognised by the shape of the
 response, so any OpenAI-compatible API, Anthropic and Gemini work without naming the provider.
 Recording runs in a background thread (with ``AsyncNozle``, a task on the event loop) and never
-changes or fails the provider response.
+changes or fails the provider response. With ``buffer=`` the usage event is instead queued on that
+event buffer as the response ends, so ``buffer.flush()`` or ``close()`` delivers it.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from nozle.integrations._common import (
 
 if TYPE_CHECKING:
     from nozle.client import AsyncNozle, Nozle
+    from nozle.event_buffer import AnyEventBuffer
 
 CustomerResolver = Union[str, Callable[[Any], Optional[str]], None]
 
@@ -63,8 +65,10 @@ class _Options:
         cost_meter_code: Optional[str],
         include_stream_usage: bool,
         on_error: Optional[Callable[[Exception], None]],
+        buffer: Optional[AnyEventBuffer],
     ) -> None:
         self.nozle = nozle
+        self.buffer = buffer
         self.customer_id = customer_id
         self.feature_code = feature_code
         self.feature = feature
@@ -138,7 +142,15 @@ class _Call:
             return
         if found is None:
             return
-        steps = self._record(found)
+        # Run up to the first request here, so a buffered usage event is queued before this
+        # returns; only the requests left (cost events, the Feature check) go to the background.
+        try:
+            steps = _started(self._record(found))
+        except Exception as error:  # recording never fails the provider response
+            self.options.report(error)
+            return
+        if steps is None:
+            return
         if is_async_client(self.options.nozle):
             # Runs on the event loop that owns AsyncNozle's httpx client.
             task = asyncio.get_running_loop().create_task(run_async(steps))
@@ -176,12 +188,36 @@ class _Call:
                 request_id=found.id,
                 usage=found.usage,
                 latency_ms=int((time.monotonic() - self.started) * 1000),
+                buffer=options.buffer,
             )
         ):
             options.report(error)
         setup_error = yield from check_feature_steps(options.nozle, options.feature_code)
         if setup_error is not None:
             options.report(setup_error)
+
+
+def _started(steps: Steps[None]) -> Optional[Steps[None]]:
+    """Run ``steps`` up to its first request now; return the rest, or None when it is done."""
+    try:
+        step = next(steps)
+    except StopIteration:
+        return None
+
+    def rest() -> Steps[None]:
+        current = step
+        while True:
+            try:
+                try:
+                    result = yield current
+                except BaseException as error:  # handed back to the operation, as run_sync does
+                    current = steps.throw(error)
+                else:
+                    current = steps.send(result)
+            except StopIteration:
+                return
+
+    return rest()
 
 
 def _prepare(http: ModuleType, options: _Options, request: Any) -> tuple[Any, Optional[_Call]]:
@@ -365,6 +401,7 @@ def wrap_http_client(
     cost_meter_code: Optional[str] = None,
     include_stream_usage: bool = True,
     on_error: Optional[Callable[[Exception], None]] = None,
+    buffer: Optional[AnyEventBuffer] = None,
 ) -> Any:
     """Make an existing httpx or httpx2 client (sync or async) record LLM token usage.
 
@@ -374,13 +411,22 @@ def wrap_http_client(
     wins and is not sent to the provider. Without a customer the request passes through and
     nothing is recorded. Recording failures go to ``on_error``, or to a ``NozleTrackingWarning``,
     and so does a ``feature_not_found`` error, once per event code, when no Feature has the code.
+    With ``buffer`` (an ``EventBuffer`` or ``AsyncEventBuffer``) the usage event is queued there
+    instead of sent on its own; cost events and the Feature check are still sent in the background.
     """
     http = _client_module(client)
     kind = "async" if isinstance(client, http.AsyncClient) else "sync"
     if kind == "sync" and is_async_client(nozle):
         raise TypeError("AsyncNozle records usage from an httpx AsyncClient; use Nozle here")
     options = _Options(
-        nozle, customer_id, feature_code, feature, cost_meter_code, include_stream_usage, on_error
+        nozle,
+        customer_id,
+        feature_code,
+        feature,
+        cost_meter_code,
+        include_stream_usage,
+        on_error,
+        buffer,
     )
     transport_class = _classes(http)[kind]
     client._transport = transport_class(client._transport, options)
@@ -417,6 +463,7 @@ _CAPTURE_OPTIONS = (
     "cost_meter_code",
     "include_stream_usage",
     "on_error",
+    "buffer",
 )
 
 

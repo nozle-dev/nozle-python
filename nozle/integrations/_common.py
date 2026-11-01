@@ -7,10 +7,13 @@ import weakref
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
-from typing import Any, Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional
 from urllib.parse import quote
 
 from nozle._operation import Steps, run_async, run_sync
+
+if TYPE_CHECKING:
+    from nozle.event_buffer import AnyEventBuffer
 
 
 class ClientView:
@@ -253,6 +256,7 @@ def safe_capture_provider_usage(
     usage: ProviderTokenUsage,
     latency_ms: int,
     provider_host: Optional[str] = None,
+    buffer: Optional[AnyEventBuffer] = None,
 ) -> None:
     for error in capture_provider_usage(
         nozle,
@@ -266,6 +270,7 @@ def safe_capture_provider_usage(
         usage=usage,
         latency_ms=latency_ms,
         provider_host=provider_host,
+        buffer=buffer,
     ):
         warn_tracking_failure(error)
 
@@ -298,9 +303,11 @@ def capture_usage_steps(
     usage: ProviderTokenUsage,
     latency_ms: int,
     provider_host: Optional[str] = None,
+    buffer: Optional[AnyEventBuffer] = None,
 ) -> Steps[list[Exception]]:
     """``capture_provider_usage`` for ``Nozle`` and ``AsyncNozle``: each yield is one client call
-    (see ``nozle._operation``)."""
+    (see ``nozle._operation``). With ``buffer``, the usage event is queued there, before the
+    first yield, and only cost events are sent from here."""
     errors: list[Exception] = []
     properties = tracking_properties(
         provider=provider,
@@ -317,7 +324,7 @@ def capture_usage_steps(
 
     if not request_id and not cost_meter_code:
         try:
-            yield partial(nozle.track, customer_id, feature_code, metadata=properties)
+            yield from _track(nozle, buffer, customer_id, feature_code, metadata=properties)
         except Exception as error:  # tracking must not corrupt a successful provider response
             errors.append(error)
         return errors
@@ -328,8 +335,9 @@ def capture_usage_steps(
     )
     occurred_at = datetime.now(timezone.utc)
     try:
-        yield partial(
-            nozle.track,
+        yield from _track(
+            nozle,
+            buffer,
             customer_id,
             feature_code,
             metadata=properties,
@@ -362,6 +370,14 @@ def capture_usage_steps(
         except Exception as error:  # tracking must not corrupt a successful provider response
             errors.append(error)
     return errors
+
+
+def _track(nozle: Any, buffer: Optional[AnyEventBuffer], *args: Any, **kwargs: Any) -> Steps[None]:
+    """One usage event: queued on ``buffer`` at once (no request), or one ``nozle.track`` call."""
+    if buffer is not None:
+        buffer.track(*args, **kwargs)
+        return
+    yield partial(nozle.track, *args, **kwargs)
 
 
 async def safe_capture_provider_usage_async(
