@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.32.0 — unreleased
+## 0.32.0 — 2026-11-01
 
 Needs an Engine with event void (NLD-8).
 
