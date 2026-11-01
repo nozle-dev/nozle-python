@@ -615,7 +615,8 @@ sends nothing. To batch events as they happen, use an event buffer.
 `event_buffer()` returns a buffer that queues events and sends them through `track_batch()` from
 a background thread. `buffer.track()` takes the arguments of `track()`, makes no request and
 returns the event's `transaction_id` (yours, or a generated UUID version 7 that every resend
-keeps, so Engine records the event once). It is available on `Nozle` (sync) only.
+keeps, so Engine records the event once). `AsyncNozle` has the same buffer on asyncio (see
+[below](#async-event-buffer)).
 
 ```python
 def report(error, events):
@@ -667,7 +668,30 @@ with nozle.event_buffer() as buffer:  # or close it with a with block
   returns, before the timer or the exit hook runs. Call `buffer.flush()` (or `close()`)
   before returning.
 - Like `track_batch()`, the buffer makes no subscription lookup, and the queue lives in memory
-  only. The OpenAI and Anthropic wrappers still send each event on its own.
+  only.
+- **LLM wrappers.** Pass `buffer=` to `wrap_openai()`, `wrap_anthropic()` or the HTTP capture
+  to send their usage events through the buffer (see [below](#buffered-llm-usage)).
+
+#### Async event buffer
+
+`AsyncNozle.event_buffer()` takes the same options, with the same defaults, triggers, retries,
+backoff and error codes, and sends from an asyncio task instead of a thread.
+
+```python
+async with AsyncNozle() as nozle:
+    async with nozle.event_buffer(on_error=report) as buffer:  # closes: sends what waits
+        buffer.track("cust_123", "api_call", {"tokens": 100})  # not awaited: no request
+        await buffer.flush(timeout=10)
+```
+
+- `track()` is not awaited; call it from the event loop's thread. The task starts with the first
+  `track()` made inside a running loop, or with `flush()`, and starts again on a new loop (a
+  serverless handler that runs `asyncio.run()` per call can keep one buffer); a request cut off
+  when a loop ended is sent again, with the same `transaction_id`.
+- `await flush(timeout=None)` and `await close(timeout=None)` return True when done, False on
+  timeout (the task keeps sending).
+- No event loop runs at process exit, so nothing can be sent then: events still queued are
+  reported as `failed`. `await buffer.close()` (or use `async with`) before the loop ends.
 
 ## OpenAI and Anthropic wrappers
 
@@ -723,6 +747,29 @@ arrive out of order safely.
 Provider failures are propagated. If the provider succeeds but Nozle tracking fails,
 the successful provider response or completed stream is preserved and a
 `NozleTrackingWarning` is emitted without credential-bearing error details.
+
+### Buffered LLM usage
+
+By default each usage event is sent on its own as the response ends (the HTTP capture sends it
+from a background thread), so an event can be lost when the process exits or a serverless
+host freezes it. Pass an event buffer as `buffer=` to queue the usage events there instead; the
+buffer's `flush()`, `close()` and exit hook deliver them in batches:
+
+```python
+buffer = nozle.event_buffer()
+openai = wrap_openai(OpenAI(), nozle, customer_id="customer-123", buffer=buffer)
+http = nozle.capture_http_client(customer_id="customer-123", buffer=buffer)
+
+def handler(event, context):
+    ...
+    buffer.flush(timeout=5)  # before a serverless handler returns
+```
+
+With `AsyncNozle`, pass its buffer (`nozle.event_buffer()` there) to wrapped async clients or
+`capture_async_http_client()` and `await buffer.flush()`. The usage event keeps its
+`transaction_id` (`llm-<provider>-<response id>`), so a resend never bills twice. Cost events
+(`cost_meter_code`) and the one-time Feature check are still sent on their own, and the buffered
+event makes no subscription lookup (Engine resolves it, as for `track_batch()`).
 
 ## Errors
 

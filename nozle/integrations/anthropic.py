@@ -15,6 +15,7 @@ from nozle.integrations._common import (
 
 if TYPE_CHECKING:
     from nozle.client import Nozle
+    from nozle.event_buffer import AnyEventBuffer
 
 
 def wrap_anthropic(
@@ -25,8 +26,14 @@ def wrap_anthropic(
     metric_code: str = "llm_tokens",
     feature: Optional[str] = None,
     cost_meter_code: Optional[str] = None,
+    buffer: Optional[AnyEventBuffer] = None,
 ) -> Any:
-    """Wrap synchronous or asynchronous Anthropic messages with safe tracking."""
+    """Wrap synchronous or asynchronous Anthropic messages with safe tracking.
+
+    With ``buffer`` (from ``nozle.event_buffer()``, or ``event_buffer()`` of ``AsyncNozle``), the
+    usage event is queued there and sent with its batches, so ``buffer.flush()`` or ``close()``
+    delivers it; cost events are still sent at once.
+    """
 
     def wrapped_create(original: Any, *args: Any, **kwargs: Any) -> Any:
         started = time.monotonic()
@@ -44,6 +51,7 @@ def wrap_anthropic(
                 requested_model,
                 is_stream,
                 started,
+                buffer,
             )
         if is_stream:
             if hasattr(result, "__aiter__"):
@@ -56,6 +64,7 @@ def wrap_anthropic(
                     cost_meter_code,
                     requested_model,
                     started,
+                    buffer,
                 )
             return _wrap_sync_stream(
                 result,
@@ -66,6 +75,7 @@ def wrap_anthropic(
                 cost_meter_code,
                 requested_model,
                 started,
+                buffer,
             )
         _track_response(
             result,
@@ -76,6 +86,7 @@ def wrap_anthropic(
             cost_meter_code,
             requested_model,
             started,
+            buffer,
         )
         return result
 
@@ -92,6 +103,7 @@ async def _await_result(
     requested_model: Any,
     is_stream: bool,
     started: float,
+    buffer: Optional[AnyEventBuffer],
 ) -> Any:
     result = await awaitable
     if is_stream:
@@ -105,6 +117,7 @@ async def _await_result(
                 cost_meter_code,
                 requested_model,
                 started,
+                buffer,
             )
         return _wrap_sync_stream(
             result,
@@ -115,6 +128,7 @@ async def _await_result(
             cost_meter_code,
             requested_model,
             started,
+            buffer,
         )
     usage = value(result, "usage")
     if usage is not None:
@@ -130,6 +144,7 @@ async def _await_result(
             request_id=value(result, "id"),
             usage=normalize_anthropic_usage(usage),
             latency_ms=int((time.monotonic() - started) * 1000),
+            buffer=buffer,
         )
     return result
 
@@ -143,6 +158,7 @@ def _track_response(
     cost_meter_code: Optional[str],
     requested_model: Any,
     started: float,
+    buffer: Optional[AnyEventBuffer],
 ) -> None:
     usage = value(result, "usage")
     if usage is not None:
@@ -158,6 +174,7 @@ def _track_response(
             request_id=value(result, "id"),
             usage=normalize_anthropic_usage(usage),
             latency_ms=int((time.monotonic() - started) * 1000),
+            buffer=buffer,
         )
 
 
@@ -170,6 +187,7 @@ def _wrap_sync_stream(
     cost_meter_code: Optional[str],
     model: Any,
     started: float,
+    buffer: Optional[AnyEventBuffer],
 ) -> Iterator[Any]:
     usage: dict[str, Any] = {}
     response_model = model
@@ -205,6 +223,7 @@ def _wrap_sync_stream(
             request_id=request_id,
             usage=normalize_anthropic_usage(usage),
             latency_ms=int((time.monotonic() - started) * 1000),
+            buffer=buffer,
         )
 
 
@@ -217,6 +236,7 @@ async def _wrap_async_stream(
     cost_meter_code: Optional[str],
     model: Any,
     started: float,
+    buffer: Optional[AnyEventBuffer],
 ) -> AsyncIterator[Any]:
     usage: dict[str, Any] = {}
     response_model = model
@@ -252,4 +272,5 @@ async def _wrap_async_stream(
             request_id=request_id,
             usage=normalize_anthropic_usage(usage),
             latency_ms=int((time.monotonic() - started) * 1000),
+            buffer=buffer,
         )

@@ -40,7 +40,7 @@ from nozle.customers import CustomersNamespace
 from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
 from nozle.errors import NO_ACTIVE_SUBSCRIPTION, NozleAPIError, NozleValidationError
-from nozle.event_buffer import EventBuffer, OnError
+from nozle.event_buffer import AsyncEventBuffer, EventBuffer, OnError
 from nozle.events import EventsNamespace
 from nozle.invoices import InvoicesNamespace
 from nozle.margin import MarginClient
@@ -1114,6 +1114,30 @@ class AsyncNozle(_BaseNozle[Async]):
                 max_retries=max_retries,
                 retry_delay=retry_delay,
             ),
+        )
+
+    def event_buffer(
+        self,
+        *,
+        max_batch_size: int = 500,
+        flush_interval: float = 5.0,
+        max_queue_size: int = 10_000,
+        max_attempts: int = 3,
+        on_error: Optional[OnError] = None,
+    ) -> AsyncEventBuffer:
+        """Return a buffer that sends events through ``track_batch()`` from an asyncio task.
+
+        The options and behaviour of :meth:`Nozle.event_buffer`. ``buffer.track(...)`` is not
+        awaited; ``await buffer.flush()`` and ``await buffer.close()`` are, and ``async with``
+        closes it. See :class:`nozle.event_buffer.AsyncEventBuffer`.
+        """
+        return AsyncEventBuffer(
+            self,
+            max_batch_size=max_batch_size,
+            flush_interval=flush_interval,
+            max_queue_size=max_queue_size,
+            max_attempts=max_attempts,
+            on_error=on_error,
         )
 
     async def aclose(self) -> None:

@@ -31,7 +31,7 @@ from nozle.errors import (
     RefusalReason,
     UsageLimitExceededError,
 )
-from nozle.event_buffer import EventBuffer, EventBufferError
+from nozle.event_buffer import AsyncEventBuffer, EventBuffer, EventBufferError
 from nozle.events import EventsNamespace
 from nozle.integrations import NozleTrackingWarning
 from nozle.integrations.anthropic import wrap_anthropic
@@ -283,6 +283,7 @@ __all__ = [
     "EntityCreditTransferSource",
     "EntitiesNamespace",
     "EntitySubscriptionsNamespace",
+    "AsyncEventBuffer",
     "EventBuffer",
     "EventBufferError",
     "EventsNamespace",

@@ -436,3 +436,95 @@ async def test_concurrent_streams_on_a_shared_client_bill_their_own_customer() -
     await asyncio.gather(*(call(customer_id) for customer_id in CUSTOMERS))
 
     assert sorted(billed(tracker.track)) == CUSTOMERS
+
+
+def _batch_events(body: bytes) -> list:
+    import gzip
+    import json
+
+    return json.loads(gzip.decompress(body))["events"]
+
+
+def test_a_wrapper_with_a_buffer_queues_the_usage_event_and_flush_sends_it(
+    requests_mock: Any,
+) -> None:
+    from nozle import Nozle
+
+    requests_mock.post("https://api.example/engine/api/v1/events/batch", json={"events": []})
+    buffer = Nozle("sk_test", base_url="https://api.example/engine").event_buffer(flush_interval=0)
+    response = SimpleNamespace(
+        id="chat_9", model="gpt-5", usage=SimpleNamespace(prompt_tokens=11, completion_tokens=7)
+    )
+    tracker = cost_tracker()
+    provider = wrap_openai(
+        client_with_create(lambda **_: response, "openai"),
+        tracker,
+        customer_id="cust_1",
+        feature="assistant",
+        cost_meter_code="ai_tokens",
+        buffer=buffer,
+    )
+
+    assert provider.chat.completions.create(model="gpt-5") is response
+    assert not tracker.track.called and buffer.size == 1 and requests_mock.call_count == 0
+    assert tracker.cost_events.track.call_count == 2  # cost events are still sent at once
+    assert buffer.close(timeout=3)
+    [event] = _batch_events(requests_mock.last_request.body)
+    assert event["transaction_id"] == "llm-openai-chat_9"
+    assert (event["external_customer_id"], event["code"]) == ("cust_1", "llm_tokens")
+    assert (
+        event["properties"]["input_tokens"] == 11 and event["properties"]["feature"] == "assistant"
+    )
+
+
+@pytest.mark.asyncio
+async def test_async_wrappers_with_an_async_buffer_send_usage_on_flush() -> None:
+    import httpx
+
+    from nozle import AsyncNozle
+
+    batches: list = []
+
+    def engine(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/engine/api/v1/events/batch"
+        batches.append(_batch_events(request.content))
+        return httpx.Response(200, json={"events": []})
+
+    nozle = AsyncNozle(
+        "sk_test",
+        base_url="https://api.example/engine",
+        _client=httpx.AsyncClient(transport=httpx.MockTransport(engine)),
+    )
+    buffer = nozle.event_buffer(flush_interval=0)
+    response = SimpleNamespace(
+        id="chat_a", model="gpt-5", usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2)
+    )
+
+    async def create_response(**_: Any) -> Any:
+        return response
+
+    async def stream() -> AsyncIterator[Any]:
+        yield {"type": "message_start", "message": {"id": "msg_b", "usage": {"input_tokens": 5}}}
+        yield {"type": "message_delta", "usage": {"output_tokens": 4}}
+
+    async def create_stream(**_: Any) -> Any:
+        return stream()
+
+    openai = wrap_openai(
+        client_with_create(create_response, "openai"), nozle, customer_id="c1", buffer=buffer
+    )
+    anthropic = wrap_anthropic(
+        client_with_create(create_stream, "anthropic"), nozle, customer_id="c2", buffer=buffer
+    )
+    assert await openai.chat.completions.create(model="gpt-5") is response
+    assert [e async for e in await anthropic.messages.create(model="claude", stream=True)]
+    assert buffer.size == 2 and batches == []
+
+    assert await buffer.flush(timeout=3)
+    [sent] = batches
+    assert [(e["external_customer_id"], e["transaction_id"]) for e in sent] == [
+        ("c1", "llm-openai-chat_a"),
+        ("c2", "llm-anthropic-msg_b"),
+    ]
+    assert sent[1]["properties"]["output_tokens"] == 4
+    assert await buffer.close(timeout=3)
