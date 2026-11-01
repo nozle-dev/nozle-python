@@ -32,6 +32,20 @@ class EventVoidErrorCode(str, Enum):
     TRANSACTION_VOIDED = "transaction_voided"
 
 
+class CustomerTaxErrorCode(str, Enum):
+    """Codes for customer tax data. The first three arrive in ``error_details``
+    (``tax_identification_type`` / ``tax_identification_number``) of a 422 ``customers.upsert``;
+    ``TAX_LOCATION_REQUIRED`` (422, ``error_details["customer"]``: ``country_missing`` or
+    ``address_missing``) and ``TAX_CHECK_PENDING`` (409, see ``retry_after_seconds``) refuse a
+    checkout call. Test with ``error.has_code(CustomerTaxErrorCode.INVALID_FORMAT)``."""
+
+    VALUE_IS_INVALID = "value_is_invalid"
+    VALUE_IS_MANDATORY = "value_is_mandatory"
+    INVALID_FORMAT = "invalid_format"
+    TAX_LOCATION_REQUIRED = "customer_tax_location_required"
+    TAX_CHECK_PENDING = "customer_tax_check_pending"
+
+
 class RefusalReason(str, Enum):
     """Why ``can()``, ``usage.check()``, ``usage.track()`` or a hold answers ``allowed: False``
     (its ``reason``), and the ``code`` of the LLM proxy's 402/429 refusals.
@@ -108,6 +122,18 @@ class NozleAPIError(NozleError):
         details = self.response_details
         value = details.get("code") if isinstance(details, dict) else None
         return value if isinstance(value, str) else None
+
+    @property
+    def retry_after_seconds(self) -> Optional[float]:
+        """Seconds to wait, from the body's ``retry_after_seconds`` (a 409
+        ``customer_tax_check_pending``), when Core sent one."""
+        details = self.response_details
+        value = details.get("retry_after_seconds") if isinstance(details, dict) else None
+        return (
+            float(value)
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+            else None
+        )
 
     def has_code(self, code: str) -> bool:
         """True when ``code`` is the top-level code or is listed in ``error_details``.

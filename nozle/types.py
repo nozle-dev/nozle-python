@@ -601,6 +601,131 @@ class CustomerBillingConfiguration(_CustomerBillingConfigurationRequired, total=
     provider_payment_methods: list[str]
 
 
+# Stripe's tax ID types. Core validates; a type a newer Core adds still arrives as a plain string.
+TaxIdKnownType = Literal[
+    "ad_nrt",
+    "ae_trn",
+    "al_tin",
+    "am_tin",
+    "ao_tin",
+    "ar_cuit",
+    "au_abn",
+    "au_arn",
+    "ba_tin",
+    "bb_tin",
+    "bg_uic",
+    "bh_vat",
+    "bo_tin",
+    "br_cnpj",
+    "br_cpf",
+    "bs_tin",
+    "by_tin",
+    "ca_bn",
+    "ca_gst_hst",
+    "ca_pst_bc",
+    "ca_pst_mb",
+    "ca_pst_sk",
+    "ca_qst",
+    "cd_nif",
+    "ch_uid",
+    "ch_vat",
+    "cl_tin",
+    "cn_tin",
+    "co_nit",
+    "cr_tin",
+    "de_stn",
+    "do_rcn",
+    "ec_ruc",
+    "eg_tin",
+    "es_cif",
+    "eu_oss_vat",
+    "eu_vat",
+    "gb_vat",
+    "ge_vat",
+    "gn_nif",
+    "hk_br",
+    "hr_oib",
+    "hu_tin",
+    "id_npwp",
+    "il_vat",
+    "in_gst",
+    "is_vat",
+    "jp_cn",
+    "jp_rn",
+    "jp_trn",
+    "ke_pin",
+    "kg_tin",
+    "kh_tin",
+    "kr_brn",
+    "kz_bin",
+    "li_uid",
+    "li_vat",
+    "ma_vat",
+    "md_vat",
+    "me_pib",
+    "mk_vat",
+    "mr_nif",
+    "mx_rfc",
+    "my_frp",
+    "my_itn",
+    "my_sst",
+    "ng_tin",
+    "no_vat",
+    "no_voec",
+    "np_pan",
+    "nz_gst",
+    "om_vat",
+    "pe_ruc",
+    "ph_tin",
+    "ro_tin",
+    "rs_pib",
+    "ru_inn",
+    "ru_kpp",
+    "sa_vat",
+    "sg_gst",
+    "sg_uen",
+    "si_tin",
+    "sn_ninea",
+    "sr_fin",
+    "sv_nit",
+    "th_vat",
+    "tj_tin",
+    "tr_tin",
+    "tw_vat",
+    "tz_vat",
+    "ua_vat",
+    "ug_tin",
+    "us_ein",
+    "uy_ruc",
+    "uz_tin",
+    "uz_vat",
+    "ve_rif",
+    "vn_tin",
+    "za_vat",
+    "zm_tin",
+    "zw_tin",
+]
+TaxIdType = Union[TaxIdKnownType, str]
+TaxIdStatus = Literal["unverified", "pending", "valid", "invalid"]
+TaxTreatment = Literal["standard", "reverse_charge", "exempt", "provider", "pending", "none"]
+CustomerType = Literal["company", "individual"]
+
+
+class CustomerAddress(TypedDict, total=False):
+    line1: str
+    line2: str
+    city: str
+    state: str
+    postal_code: str
+    #: ISO 3166-1 alpha-2, for example ``DE``.
+    country: str
+
+
+class CustomerTaxId(TypedDict):
+    type: TaxIdType
+    value: str
+
+
 class _CustomerUpsertResultRequired(TypedDict):
     external_id: str
 
@@ -608,6 +733,21 @@ class _CustomerUpsertResultRequired(TypedDict):
 class CustomerUpsertResult(_CustomerUpsertResultRequired, total=False):
     name: str
     email: str
+    tax_identification_type: Optional[TaxIdType]
+    tax_identification_status: TaxIdStatus
+    tax_treatment: TaxTreatment
+    #: Non-blocking notes on a write, for example ``country_mismatch``. Only on upsert responses.
+    tax_identification_warnings: List[str]
+
+
+class InvoiceTaxDetails(TypedDict, total=False):
+    treatment: TaxTreatment
+    tax_identification_number: Optional[str]
+    tax_identification_type: Optional[TaxIdType]
+    tax_identification_status: TaxIdStatus
+    tax_identification_consultation_number: Optional[str]
+    customer_country: Optional[str]
+    seller_tax_identification_number: Optional[str]
 
 
 class CheckAndDeductResult(TypedDict):
@@ -1036,6 +1176,11 @@ class Invoice(_InvoiceRequired, total=False):
     payment_overdue: bool
     file_url: Optional[str]
     customer: Dict[str, Any]
+    #: From Cores with customer tax data: ``pending``, ``succeeded`` or ``failed``.
+    tax_status: Optional[str]
+    tax_treatment: TaxTreatment
+    #: ``None`` on invoices finalized before customer tax data existed.
+    tax_details: Optional[InvoiceTaxDetails]
 
 
 class InvoicePage(TypedDict):

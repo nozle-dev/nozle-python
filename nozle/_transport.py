@@ -87,6 +87,10 @@ class BaseTransport(Generic[M]):
         """One request, as a step an operation yields (see ``nozle._operation``)."""
         return partial(self.request, operation, method, path, **options)
 
+    def pause(self, seconds: float) -> Step:
+        """A wait, as a step an operation yields (``time.sleep`` or ``asyncio.sleep``)."""
+        raise NotImplementedError
+
     def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
         """Operations run ``concurrency`` at a time, as one step that returns their results."""
         raise NotImplementedError
@@ -241,6 +245,9 @@ class HttpTransport(BaseTransport[Sync]):
             attempt += 1
         return self._result(operation, response, expect_json)
 
+    def pause(self, seconds: float) -> Step:
+        return partial(time.sleep, seconds)
+
     def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
         def run_all() -> List[Any]:
             if min(concurrency, len(operations)) <= 1:
@@ -317,6 +324,9 @@ class AsyncHttpTransport(BaseTransport[Async]):
             attempt += 1
         return self._result(operation, response, expect_json)
 
+    def pause(self, seconds: float) -> Step:
+        return partial(asyncio.sleep, seconds)
+
     def call_many(self, operations: List[Steps[Any]], concurrency: int) -> Step:
         async def run_all() -> List[Any]:
             gate = asyncio.Semaphore(concurrency)
@@ -370,12 +380,20 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
     return seconds if seconds >= 0 else None
 
 
+#: Put this where a request must carry an explicit ``null`` (for example clearing a stored field).
+EXPLICIT_NULL: Any = object()
+
+
 def _without_unset(value: Any) -> Any:
     """Leave out every field set to None, at any depth, so an optional field the caller did not set
     is not sent and the API applies its default. A request never needs an explicit null: where the
     API accepts null, leaving the field out means the same thing."""
     if isinstance(value, Mapping):
-        return {key: _without_unset(item) for key, item in value.items() if item is not None}
+        return {
+            key: None if item is EXPLICIT_NULL else _without_unset(item)
+            for key, item in value.items()
+            if item is not None
+        }
     if isinstance(value, list):
         return [_without_unset(item) for item in value]
     return value

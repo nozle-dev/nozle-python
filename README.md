@@ -237,6 +237,19 @@ nozle.customers.upsert(
     },
 )
 
+# Tax data. Core validates the format (error.has_code(CustomerTaxErrorCode.INVALID_FORMAT));
+# a VIES check can leave tax_identification_status "pending", so wait before checkout.
+nozle.customers.upsert(
+    "customer-123",
+    customer_type="company",
+    address={"line1": "Main St 1", "city": "Berlin", "postal_code": "10115", "country": "DE"},
+    tax_id={"type": "eu_vat", "value": "DE811128135"},  # clear_tax_id=True removes it
+)
+customer = nozle.customers.wait_for_tax_check("customer-123")  # timeout=10.0 seconds
+customer["tax_treatment"]  # "reverse_charge", "standard", ...
+# A checkout refuses with customer_tax_location_required (422) or customer_tax_check_pending
+# (409, error.retry_after_seconds); see CustomerTaxErrorCode.
+
 # Follows every active Core page and returns one normalized list.
 systems = nozle.credit_systems.list()
 ```
