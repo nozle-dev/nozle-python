@@ -5,7 +5,9 @@ import time
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator, Optional
 
 from nozle.integrations._common import (
+    StreamUsageCollector,
     call_parameter,
+    call_text_bytes,
     normalize_anthropic_usage,
     safe_capture_provider_usage,
     safe_capture_provider_usage_async,
@@ -39,6 +41,7 @@ def wrap_anthropic(
         started = time.monotonic()
         requested_model = call_parameter(args, kwargs, "model", "")
         is_stream = bool(call_parameter(args, kwargs, "stream", False))
+        input_bytes = call_text_bytes(args, kwargs)
         result = original(*args, **kwargs)
         if inspect.isawaitable(result):
             return _await_result(
@@ -52,6 +55,7 @@ def wrap_anthropic(
                 is_stream,
                 started,
                 buffer,
+                input_bytes,
             )
         if is_stream:
             if hasattr(result, "__aiter__"):
@@ -65,6 +69,7 @@ def wrap_anthropic(
                     requested_model,
                     started,
                     buffer,
+                    input_bytes,
                 )
             return _wrap_sync_stream(
                 result,
@@ -76,6 +81,7 @@ def wrap_anthropic(
                 requested_model,
                 started,
                 buffer,
+                input_bytes,
             )
         _track_response(
             result,
@@ -104,6 +110,7 @@ async def _await_result(
     is_stream: bool,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> Any:
     result = await awaitable
     if is_stream:
@@ -118,6 +125,7 @@ async def _await_result(
                 requested_model,
                 started,
                 buffer,
+                input_bytes,
             )
         return _wrap_sync_stream(
             result,
@@ -129,6 +137,7 @@ async def _await_result(
             requested_model,
             started,
             buffer,
+            input_bytes,
         )
     usage = value(result, "usage")
     if usage is not None:
@@ -188,43 +197,32 @@ def _wrap_sync_stream(
     model: Any,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> Iterator[Any]:
-    usage: dict[str, Any] = {}
-    response_model = model
-    request_id = None
-    for event in stream:
-        event_type = value(event, "type", "")
-        if event_type == "message_start":
-            message_usage = value(value(event, "message"), "usage", None)
-            usage = {
-                "input_tokens": value(message_usage, "input_tokens", 0),
-                "cache_read_input_tokens": value(message_usage, "cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": value(
-                    message_usage, "cache_creation_input_tokens", 0
-                ),
-            }
-            message = value(event, "message")
-            response_model = value(message, "model", response_model)
-            request_id = value(message, "id", request_id)
-        elif event_type == "message_delta":
-            usage["output_tokens"] = value(
-                value(event, "usage"), "output_tokens", usage.get("output_tokens", 0)
+    collector = StreamUsageCollector()
+    ended = False
+    try:
+        for chunk in stream:
+            collector.add(chunk)
+            yield chunk
+        ended = True
+    finally:
+        # Also runs when the consumer stops early (GeneratorExit) or the stream raises.
+        found = collector.result(ended, input_bytes)
+        if found is not None:
+            safe_capture_provider_usage(
+                nozle,
+                customer_id,
+                metric_code,
+                feature=feature,
+                cost_meter_code=cost_meter_code,
+                provider="anthropic",
+                model=found.model or model,
+                request_id=found.id,
+                usage=found.usage,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                buffer=buffer,
             )
-        yield event
-    if usage:
-        safe_capture_provider_usage(
-            nozle,
-            customer_id,
-            metric_code,
-            feature=feature,
-            cost_meter_code=cost_meter_code,
-            provider="anthropic",
-            model=response_model,
-            request_id=request_id,
-            usage=normalize_anthropic_usage(usage),
-            latency_ms=int((time.monotonic() - started) * 1000),
-            buffer=buffer,
-        )
 
 
 async def _wrap_async_stream(
@@ -237,40 +235,29 @@ async def _wrap_async_stream(
     model: Any,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> AsyncIterator[Any]:
-    usage: dict[str, Any] = {}
-    response_model = model
-    request_id = None
-    async for event in stream:
-        event_type = value(event, "type", "")
-        if event_type == "message_start":
-            message_usage = value(value(event, "message"), "usage", None)
-            usage = {
-                "input_tokens": value(message_usage, "input_tokens", 0),
-                "cache_read_input_tokens": value(message_usage, "cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": value(
-                    message_usage, "cache_creation_input_tokens", 0
-                ),
-            }
-            message = value(event, "message")
-            response_model = value(message, "model", response_model)
-            request_id = value(message, "id", request_id)
-        elif event_type == "message_delta":
-            usage["output_tokens"] = value(
-                value(event, "usage"), "output_tokens", usage.get("output_tokens", 0)
+    collector = StreamUsageCollector()
+    ended = False
+    try:
+        async for chunk in stream:
+            collector.add(chunk)
+            yield chunk
+        ended = True
+    finally:
+        # Also runs when the consumer closes the generator early (aclose) or the stream raises.
+        found = collector.result(ended, input_bytes)
+        if found is not None:
+            await safe_capture_provider_usage_async(
+                nozle,
+                customer_id,
+                metric_code,
+                feature=feature,
+                cost_meter_code=cost_meter_code,
+                provider="anthropic",
+                model=found.model or model,
+                request_id=found.id,
+                usage=found.usage,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                buffer=buffer,
             )
-        yield event
-    if usage:
-        await safe_capture_provider_usage_async(
-            nozle,
-            customer_id,
-            metric_code,
-            feature=feature,
-            cost_meter_code=cost_meter_code,
-            provider="anthropic",
-            model=response_model,
-            request_id=request_id,
-            usage=normalize_anthropic_usage(usage),
-            latency_ms=int((time.monotonic() - started) * 1000),
-            buffer=buffer,
-        )

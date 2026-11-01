@@ -1,0 +1,887 @@
+{
+ "version": 1,
+ "about": "Shared contract of the LLM usage normalizers (Engine llmusage, nozle-js, nozle-python, nozle-go). usage: provider response body in, totals/breakdowns/buckets out. Totals are inclusive (input_tokens counts cached, cache-write, audio and image input; output_tokens counts reasoning, audio and image output); breakdowns not listed in expect are 0; buckets are the disjoint non-zero parts and sum to the totals. Clamp order: input side cached, cache_write, cache_write_1h, audio, image; output side reasoning, audio, image; each bounded by what remains. streams: SSE in, final usage out, plus whether the provider's final marker was seen and the delivered text bytes. aborted: a cut stream; the usage to bill (bill=false: no event), usage_source, and the estimator rules: input = reported, else ceil(request_text_bytes/4); output = reported, else ceil(delivered bytes/4); Anthropic output = max(reported, estimate) and usage_source estimated when the estimate won.",
+ "estimator": {
+  "bytes_per_token": 4,
+  "cases": [
+   {
+    "bytes": 0,
+    "tokens": 0
+   },
+   {
+    "bytes": 1,
+    "tokens": 1
+   },
+   {
+    "bytes": 4,
+    "tokens": 1
+   },
+   {
+    "bytes": 5,
+    "tokens": 2
+   },
+   {
+    "bytes": 8,
+    "tokens": 2
+   },
+   {
+    "bytes": 9,
+    "tokens": 3
+   }
+  ],
+  "request_text": [
+   {
+    "body": {
+     "model": "gpt-4o",
+     "stream": true,
+     "messages": [
+      {
+       "role": "user",
+       "content": "12345678"
+      }
+     ],
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "f",
+        "description": "not counted"
+       }
+      }
+     ]
+    },
+    "bytes": 8
+   },
+   {
+    "body": {
+     "model": "claude",
+     "system": "sys",
+     "messages": [
+      {
+       "role": "user",
+       "content": [
+        {
+         "type": "text",
+         "text": "hi"
+        }
+       ]
+      }
+     ]
+    },
+    "bytes": 5
+   },
+   {
+    "body": {
+     "model": "gpt",
+     "input": "hello world"
+    },
+    "bytes": 11
+   },
+   {
+    "body": {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "héllo"
+        }
+       ]
+      }
+     ]
+    },
+    "bytes": 6
+   },
+   {
+    "body": {
+     "model": "m"
+    },
+    "bytes": 0
+   }
+  ]
+ },
+ "usage": [
+  {
+   "name": "openai chat plain",
+   "payload": {
+    "id": "c1",
+    "model": "gpt-4o",
+    "usage": {
+     "prompt_tokens": 10,
+     "completion_tokens": 5
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "buckets": {
+     "input": 10,
+     "output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai cached and reasoning",
+   "payload": {
+    "id": "c2",
+    "model": "o3",
+    "usage": {
+     "prompt_tokens": 100,
+     "completion_tokens": 50,
+     "prompt_tokens_details": {
+      "cached_tokens": 40
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 20
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 100,
+    "output_tokens": 50,
+    "cached_input_tokens": 40,
+    "reasoning_tokens": 20,
+    "buckets": {
+     "input": 60,
+     "cached_input": 40,
+     "output": 30,
+     "reasoning": 20
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai cache write",
+   "payload": {
+    "usage": {
+     "prompt_tokens": 100,
+     "completion_tokens": 10,
+     "prompt_tokens_details": {
+      "cached_tokens": 30,
+      "cache_write_tokens": 50
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 100,
+    "output_tokens": 10,
+    "cached_input_tokens": 30,
+    "cache_write_tokens": 50,
+    "buckets": {
+     "input": 20,
+     "cached_input": 30,
+     "cache_write": 50,
+     "output": 10
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai audio",
+   "payload": {
+    "usage": {
+     "prompt_tokens": 120,
+     "completion_tokens": 80,
+     "prompt_tokens_details": {
+      "cached_tokens": 20,
+      "audio_tokens": 30
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 10,
+      "audio_tokens": 25
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 120,
+    "output_tokens": 80,
+    "cached_input_tokens": 20,
+    "audio_input_tokens": 30,
+    "reasoning_tokens": 10,
+    "audio_output_tokens": 25,
+    "buckets": {
+     "input": 70,
+     "cached_input": 20,
+     "audio_input": 30,
+     "output": 45,
+     "reasoning": 10,
+     "audio_output": 25
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai responses api",
+   "payload": {
+    "id": "r1",
+    "object": "response",
+    "usage": {
+     "input_tokens": 10,
+     "output_tokens": 4,
+     "input_tokens_details": {
+      "cached_tokens": 3
+     },
+     "output_tokens_details": {
+      "reasoning_tokens": 1
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 4,
+    "cached_input_tokens": 3,
+    "reasoning_tokens": 1,
+    "buckets": {
+     "input": 7,
+     "cached_input": 3,
+     "output": 3,
+     "reasoning": 1
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai batch tier",
+   "payload": {
+    "service_tier": "batch",
+    "usage": {
+     "prompt_tokens": 10,
+     "completion_tokens": 5,
+     "prompt_tokens_details": {
+      "cached_tokens": 4
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "cached_input_tokens": 4,
+    "service_tier": "batch",
+    "buckets": {
+     "batch_input": 6,
+     "cached_input": 4,
+     "batch_output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai other tiers are standard",
+   "payload": {
+    "service_tier": "flex",
+    "usage": {
+     "prompt_tokens": 10,
+     "completion_tokens": 5
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "buckets": {
+     "input": 10,
+     "output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai breakdowns clamped to totals",
+   "payload": {
+    "usage": {
+     "prompt_tokens": 10,
+     "completion_tokens": 5,
+     "prompt_tokens_details": {
+      "cached_tokens": 99,
+      "cache_write_tokens": 5,
+      "audio_tokens": 7
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 9,
+      "audio_tokens": 4
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "cached_input_tokens": 10,
+    "reasoning_tokens": 5,
+    "buckets": {
+     "cached_input": 10,
+     "reasoning": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai negative and non-numeric breakdowns are 0",
+   "payload": {
+    "usage": {
+     "prompt_tokens": 10,
+     "completion_tokens": 5,
+     "prompt_tokens_details": {
+      "cached_tokens": -3,
+      "audio_tokens": "7"
+     }
+    }
+   },
+   "expect": {
+    "format": "openai",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "buckets": {
+     "input": 10,
+     "output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic cache read and write",
+   "payload": {
+    "id": "msg_1",
+    "type": "message",
+    "usage": {
+     "input_tokens": 10,
+     "cache_read_input_tokens": 5,
+     "cache_creation_input_tokens": 7,
+     "output_tokens": 2
+    }
+   },
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 22,
+    "output_tokens": 2,
+    "cached_input_tokens": 5,
+    "cache_write_tokens": 7,
+    "buckets": {
+     "input": 10,
+     "cached_input": 5,
+     "cache_write": 7,
+     "output": 2
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic cache write split by ttl",
+   "payload": {
+    "type": "message",
+    "usage": {
+     "input_tokens": 4,
+     "cache_creation_input_tokens": 30,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 10,
+      "ephemeral_1h_input_tokens": 20
+     },
+     "output_tokens": 6
+    }
+   },
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 34,
+    "output_tokens": 6,
+    "cache_write_tokens": 10,
+    "cache_write_1h_tokens": 20,
+    "buckets": {
+     "input": 4,
+     "cache_write": 10,
+     "cache_write_1h": 20,
+     "output": 6
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic ttl object without the total",
+   "payload": {
+    "type": "message",
+    "usage": {
+     "input_tokens": 3,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 10,
+      "ephemeral_1h_input_tokens": 5
+     },
+     "output_tokens": 1
+    }
+   },
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 18,
+    "output_tokens": 1,
+    "cache_write_tokens": 10,
+    "cache_write_1h_tokens": 5,
+    "buckets": {
+     "input": 3,
+     "cache_write": 10,
+     "cache_write_1h": 5,
+     "output": 1
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic 1h part above the total is clamped",
+   "payload": {
+    "type": "message",
+    "usage": {
+     "input_tokens": 1,
+     "cache_creation_input_tokens": 5,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 9
+     },
+     "output_tokens": 1
+    }
+   },
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 6,
+    "output_tokens": 1,
+    "cache_write_1h_tokens": 5,
+    "buckets": {
+     "input": 1,
+     "cache_write_1h": 5,
+     "output": 1
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic batch tier",
+   "payload": {
+    "type": "message",
+    "usage": {
+     "input_tokens": 10,
+     "output_tokens": 5,
+     "service_tier": "batch"
+    }
+   },
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "service_tier": "batch",
+    "buckets": {
+     "batch_input": 10,
+     "batch_output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "gemini plain with thoughts",
+   "payload": {
+    "responseId": "g1",
+    "usageMetadata": {
+     "promptTokenCount": 12,
+     "candidatesTokenCount": 6,
+     "thoughtsTokenCount": 4
+    }
+   },
+   "expect": {
+    "format": "gemini",
+    "input_tokens": 12,
+    "output_tokens": 10,
+    "reasoning_tokens": 4,
+    "buckets": {
+     "input": 12,
+     "output": 6,
+     "reasoning": 4
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "gemini modalities",
+   "payload": {
+    "usageMetadata": {
+     "promptTokenCount": 100,
+     "cachedContentTokenCount": 20,
+     "promptTokensDetails": [
+      {
+       "modality": "TEXT",
+       "tokenCount": 60
+      },
+      {
+       "modality": "AUDIO",
+       "tokenCount": 30
+      },
+      {
+       "modality": "IMAGE",
+       "tokenCount": 10
+      }
+     ],
+     "candidatesTokenCount": 50,
+     "candidatesTokensDetails": [
+      {
+       "modality": "TEXT",
+       "tokenCount": 30
+      },
+      {
+       "modality": "AUDIO",
+       "tokenCount": 15
+      },
+      {
+       "modality": "IMAGE",
+       "tokenCount": 5
+      }
+     ],
+     "thoughtsTokenCount": 8
+    }
+   },
+   "expect": {
+    "format": "gemini",
+    "input_tokens": 100,
+    "output_tokens": 58,
+    "cached_input_tokens": 20,
+    "audio_input_tokens": 30,
+    "image_input_tokens": 10,
+    "reasoning_tokens": 8,
+    "audio_output_tokens": 15,
+    "image_output_tokens": 5,
+    "buckets": {
+     "input": 40,
+     "cached_input": 20,
+     "audio_input": 30,
+     "image_input": 10,
+     "output": 30,
+     "reasoning": 8,
+     "audio_output": 15,
+     "image_output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "no usage",
+   "payload": {
+    "data": []
+   },
+   "expect": {
+    "found": false
+   }
+  },
+  {
+   "name": "usage without token counts",
+   "payload": {
+    "usage": {
+     "total": 3
+    }
+   },
+   "expect": {
+    "found": false
+   }
+  }
+ ],
+ "streams": [
+  {
+   "name": "openai chat complete",
+   "sse": "data: {\"id\":\"c3\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":5,\"prompt_tokens_details\":{\"cached_tokens\":1}}}\n\ndata: [DONE]\n\n",
+   "complete": true,
+   "delivered_bytes": 5,
+   "expect": {
+    "format": "openai",
+    "input_tokens": 4,
+    "output_tokens": 5,
+    "cached_input_tokens": 1,
+    "buckets": {
+     "input": 3,
+     "cached_input": 1,
+     "output": 5
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "anthropic complete",
+   "sse": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_2\",\"model\":\"claude-sonnet\",\"usage\":{\"input_tokens\":20,\"cache_read_input_tokens\":10,\"output_tokens\":1}}}\n\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"0123456789\"}}\n\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":15}}\n\ndata: {\"type\":\"message_stop\"}\n\n",
+   "complete": true,
+   "delivered_bytes": 10,
+   "expect": {
+    "format": "anthropic",
+    "input_tokens": 30,
+    "output_tokens": 15,
+    "cached_input_tokens": 10,
+    "buckets": {
+     "input": 20,
+     "cached_input": 10,
+     "output": 15
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "responses api complete",
+   "sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r2\",\"usage\":null}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"abcdef\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r2\",\"model\":\"gpt\",\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}}\n\n",
+   "complete": true,
+   "delivered_bytes": 6,
+   "expect": {
+    "format": "openai",
+    "input_tokens": 7,
+    "output_tokens": 3,
+    "buckets": {
+     "input": 7,
+     "output": 3
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "gemini last chunk carries the finish reason",
+   "sse": "data: {\"responseId\":\"g2\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"abc\"}]}}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":1}}\n\ndata: {\"responseId\":\"g2\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"de\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3}}\n\n",
+   "complete": true,
+   "delivered_bytes": 5,
+   "expect": {
+    "format": "gemini",
+    "input_tokens": 5,
+    "output_tokens": 3,
+    "buckets": {
+     "input": 5,
+     "output": 3
+    },
+    "found": true
+   }
+  },
+  {
+   "name": "openai chat cut before the final chunk",
+   "sse": "data: {\"id\":\"c3\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n",
+   "complete": false,
+   "delivered_bytes": 5,
+   "expect": {
+    "found": false
+   }
+  }
+ ],
+ "aborted": [
+  {
+   "name": "openai chat cut, no usage at all",
+   "sse": "data: {\"id\":\"c3\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n",
+   "fallback_format": "openai",
+   "request_body": {
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [
+     {
+      "role": "user",
+      "content": "12345678"
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "f",
+       "description": "not counted"
+      }
+     }
+    ]
+   },
+   "request_text_bytes": 8,
+   "expect": {
+    "bill": true,
+    "usage_source": "estimated",
+    "format": "openai",
+    "input_tokens": 2,
+    "output_tokens": 2,
+    "buckets": {
+     "input": 2,
+     "output": 2
+    }
+   }
+  },
+  {
+   "name": "openai chat cut with a long answer",
+   "sse": "data: {\"id\":\"c4\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"content\":\"abcdefghi\"}}]}\n\n",
+   "fallback_format": "openai",
+   "request_body": {
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [
+     {
+      "role": "user",
+      "content": "12345678"
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "f",
+       "description": "not counted"
+      }
+     }
+    ]
+   },
+   "request_text_bytes": 8,
+   "expect": {
+    "bill": true,
+    "usage_source": "estimated",
+    "format": "openai",
+    "input_tokens": 2,
+    "output_tokens": 3,
+    "buckets": {
+     "input": 2,
+     "output": 3
+    }
+   }
+  },
+  {
+   "name": "openai chat cut after the usage chunk",
+   "sse": "data: {\"id\":\"c3\",\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\ndata: {\"id\":\"c3\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":5,\"prompt_tokens_details\":{\"cached_tokens\":1}}}\n\n",
+   "fallback_format": "openai",
+   "request_body": {
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [
+     {
+      "role": "user",
+      "content": "12345678"
+     }
+    ],
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "f",
+       "description": "not counted"
+      }
+     }
+    ]
+   },
+   "request_text_bytes": 8,
+   "expect": {
+    "bill": true,
+    "usage_source": "reported",
+    "format": "openai",
+    "input_tokens": 4,
+    "output_tokens": 5,
+    "cached_input_tokens": 1,
+    "buckets": {
+     "input": 3,
+     "cached_input": 1,
+     "output": 5
+    }
+   }
+  },
+  {
+   "name": "openai responses cut, no usage",
+   "sse": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r3\",\"model\":\"gpt\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"abcde\"}\n\n",
+   "fallback_format": "openai",
+   "request_body": {
+    "model": "gpt",
+    "input": "hello world",
+    "stream": true
+   },
+   "request_text_bytes": 11,
+   "expect": {
+    "bill": true,
+    "usage_source": "estimated",
+    "format": "openai",
+    "input_tokens": 3,
+    "output_tokens": 2,
+    "buckets": {
+     "input": 3,
+     "output": 2
+    }
+   }
+  },
+  {
+   "name": "anthropic cut after message_start only, output raised to the estimate",
+   "sse": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_2\",\"model\":\"claude-sonnet\",\"usage\":{\"input_tokens\":20,\"cache_read_input_tokens\":10,\"output_tokens\":1}}}\n\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}\n\n",
+   "fallback_format": "anthropic",
+   "request_body": {
+    "model": "claude",
+    "system": "sys",
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "hi"
+       }
+      ]
+     }
+    ]
+   },
+   "request_text_bytes": 5,
+   "expect": {
+    "bill": true,
+    "usage_source": "estimated",
+    "format": "anthropic",
+    "input_tokens": 30,
+    "output_tokens": 10,
+    "cached_input_tokens": 10,
+    "buckets": {
+     "input": 20,
+     "cached_input": 10,
+     "output": 10
+    }
+   }
+  },
+  {
+   "name": "anthropic cut with a reported output above the estimate",
+   "sse": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_2\",\"model\":\"claude-sonnet\",\"usage\":{\"input_tokens\":20,\"cache_read_input_tokens\":10,\"output_tokens\":1}}}\n\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"aaaaaaaaaaaaaaaaaaaa\"}}\n\ndata: {\"type\":\"message_delta\",\"delta\":{},\"usage\":{\"output_tokens\":15}}\n\n",
+   "fallback_format": "anthropic",
+   "request_body": {
+    "model": "claude"
+   },
+   "request_text_bytes": 0,
+   "expect": {
+    "bill": true,
+    "usage_source": "reported",
+    "format": "anthropic",
+    "input_tokens": 30,
+    "output_tokens": 15,
+    "cached_input_tokens": 10,
+    "buckets": {
+     "input": 20,
+     "cached_input": 10,
+     "output": 15
+    }
+   }
+  },
+  {
+   "name": "gemini cut keeps its cumulative count",
+   "sse": "data: {\"responseId\":\"g3\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"abcdefgh\"}]}}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":1}}\n\n",
+   "fallback_format": "gemini",
+   "request_body": {
+    "contents": []
+   },
+   "request_text_bytes": 0,
+   "expect": {
+    "bill": true,
+    "usage_source": "reported",
+    "format": "gemini",
+    "input_tokens": 5,
+    "output_tokens": 1,
+    "buckets": {
+     "input": 5,
+     "output": 1
+    }
+   }
+  },
+  {
+   "name": "nothing delivered and no usage is not billed",
+   "sse": "data: {\"id\":\"c5\",\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n",
+   "fallback_format": "openai",
+   "request_body": {
+    "model": "gpt-4o",
+    "messages": []
+   },
+   "request_text_bytes": 0,
+   "expect": {
+    "bill": false
+   }
+  }
+ ]
+}

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.33.0 — 2026-11-01
+
+Usage events carry the token breakdown, and a stream that ends early is recorded (NLD-3). Needs a Core that accepts the `cache_write_1h` token type before a catalog price for it can exist.
+
+### Added
+
+- The usage event of `wrap_openai`, `wrap_anthropic`, `wrap_http_client` and `record_usage` now sends the breakdowns next to the inclusive `input_tokens` and `output_tokens`: `cached_input_tokens`, `cache_write_tokens`, `cache_write_1h_tokens`, `reasoning_tokens`, `audio_input_tokens`, `audio_output_tokens`, `image_input_tokens`, `image_output_tokens` (each left out when 0) and `service_tier: "batch"` for a batch-tier call. `usage_source` (`reported` or `estimated`) is on every usage event.
+- New cost-event categories (`type`): `cache_write_1h` (Anthropic 1 hour cache writes, split from `cache_write`), `audio_input`, `audio_output`, `image_input`, `image_output` (Gemini modality details, OpenAI audio details) and `batch_input` / `batch_output` for a batch-tier call. Categories are disjoint: each token is in exactly one.
+- `record_usage` accepts `cache_write_1h_tokens`, `audio_input_tokens`, `audio_output_tokens`, `image_input_tokens`, `image_output_tokens` and `service_tier`.
+- A stream that ends early (consumer `break`, an exception, a dropped connection) is recorded with `stream_aborted: true`. Provider-reported partial usage is used as is; when the provider sent none, or Anthropic's output is below the delivered text, the SDK estimates `ceil(delivered UTF-8 bytes / 4)` tokens (input from the request message text) and sets `usage_source: "estimated"`.
+
+### Fixed
+
+- OpenAI `prompt_tokens_details.cache_write_tokens` is no longer ignored.
+- `wrap_openai` and `wrap_anthropic` streams (sync and async) no longer lose the usage when the consumer stops iterating early.
+- Cost events use `cost_event_id = <usage transaction_id>:<type>`, the same as the Go SDK, so a resend is deduplicated.
+- Only a number counts as a token count: a numeric string in a provider usage object is read as 0, as in the Engine and the other SDKs.
+
 ## 0.32.0 — 2026-11-01
 
 Needs an Engine with event void (NLD-8).

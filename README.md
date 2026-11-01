@@ -772,13 +772,21 @@ streams are supported for OpenAI and Anthropic. The parent Feature Event contain
 - `input_tokens`
 - `output_tokens`
 - `latency_ms`
-- optional `feature`
+- `usage_source` (`reported`, or `estimated` for an aborted stream)
+- optional `feature`, the breakdowns `cached_input_tokens`, `cache_write_tokens`,
+  `cache_write_1h_tokens`, `reasoning_tokens`, `audio_input_tokens`, `audio_output_tokens`,
+  `image_input_tokens`, `image_output_tokens` (each left out when 0), `service_tier: "batch"`
+  and `stream_aborted: true` (a stream that ended early; unreported tokens are estimated as
+  delivered bytes / 4)
 
 When `cost_meter_code` is set, the wrapper generates the parent `transaction_id`
 before delivery and emits one linked Cost Event for each non-zero token category.
 The canonical Cost Event properties are `tokens`, `provider`, `model`, and `type`.
-OpenAI supports `input`, `cached_input`, `output`, and `reasoning`; Anthropic supports
-`input`, `cached_input`, `cache_write`, and `output`. Parent and child events may
+Categories are disjoint (each token is in one) and the cost event ID is
+`<transaction_id>:<type>`. OpenAI supports `input`, `cached_input`, `cache_write`, `output`,
+`reasoning`, `audio_input` and `audio_output`; Anthropic supports `input`, `cached_input`,
+`cache_write`, `cache_write_1h` and `output`; Gemini adds `audio_*` and `image_*`. A batch-tier
+call uses `batch_input` and `batch_output` for its text tokens. Parent and child events may
 arrive out of order safely.
 
 Provider failures are propagated. If the provider succeeds but Nozle tracking fails,

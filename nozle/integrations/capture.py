@@ -39,6 +39,7 @@ from nozle.integrations._common import (
     check_feature_steps,
     detect_usage,
     is_async_client,
+    request_text_bytes,
     warn_tracking_failure,
 )
 
@@ -96,8 +97,11 @@ class _Call:
         feature: Optional[str],
         model: Optional[str],
         host: str,
+        input_bytes: int = 0,
     ) -> None:
         self.options = options
+        # UTF-8 size of the request message text, for the estimate of an aborted stream.
+        self.input_bytes = input_bytes
         self.customer_id = customer_id
         self.feature = feature
         self.model = model
@@ -134,7 +138,10 @@ class _Call:
         try:
             if self._stream:
                 self._line(self._pending.strip())
-                found = self._collector.result()
+                # A stream closed before the provider's final usage marker was cut short.
+                found = self._collector.result(
+                    complete and self._collector.complete, self.input_bytes
+                )
             else:
                 found = detect_usage(json.loads(bytes(self._buffer)))
         except Exception as error:
@@ -165,6 +172,7 @@ class _Call:
         data = line[5:].strip()
         if data == "[DONE]":
             self._done = True
+            self._collector.mark_finished()
             return
         if not data:
             return
@@ -233,6 +241,7 @@ def _prepare(http: ModuleType, options: _Options, request: Any) -> tuple[Any, Op
 
     content = request.content if request.method == "POST" else b""
     model: Optional[str] = None
+    input_bytes = 0
     new_content: Optional[bytes] = None
     if content:
         try:
@@ -240,6 +249,7 @@ def _prepare(http: ModuleType, options: _Options, request: Any) -> tuple[Any, Op
         except ValueError:
             body = None
         if isinstance(body, dict):
+            input_bytes = request_text_bytes(body)
             model = body.get("model") if isinstance(body.get("model"), str) else None
             # Chat streams leave usage out unless asked; the request path is the API contract.
             if (
@@ -265,7 +275,7 @@ def _prepare(http: ModuleType, options: _Options, request: Any) -> tuple[Any, Op
         )
     if not customer_id:
         return request, None
-    return request, _Call(options, customer_id, feature, model, request.url.host)
+    return request, _Call(options, customer_id, feature, model, request.url.host, input_bytes)
 
 
 _CLASSES: Dict[str, Dict[str, type]] = {}

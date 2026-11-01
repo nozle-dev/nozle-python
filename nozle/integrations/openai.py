@@ -5,7 +5,9 @@ import time
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator, Optional
 
 from nozle.integrations._common import (
+    StreamUsageCollector,
     call_parameter,
+    call_text_bytes,
     normalize_openai_usage,
     safe_capture_provider_usage,
     safe_capture_provider_usage_async,
@@ -39,6 +41,7 @@ def wrap_openai(
         started = time.monotonic()
         requested_model = call_parameter(args, kwargs, "model", "")
         is_stream = bool(call_parameter(args, kwargs, "stream", False))
+        input_bytes = call_text_bytes(args, kwargs)
         if is_stream:
             kwargs = dict(kwargs)
             stream_options = dict(kwargs.get("stream_options") or {})
@@ -57,6 +60,7 @@ def wrap_openai(
                 is_stream,
                 started,
                 buffer,
+                input_bytes,
             )
         if is_stream:
             if hasattr(result, "__aiter__"):
@@ -70,6 +74,7 @@ def wrap_openai(
                     requested_model,
                     started,
                     buffer,
+                    input_bytes,
                 )
             return _wrap_sync_stream(
                 result,
@@ -81,6 +86,7 @@ def wrap_openai(
                 requested_model,
                 started,
                 buffer,
+                input_bytes,
             )
         _track_response(
             result,
@@ -109,6 +115,7 @@ async def _await_result(
     is_stream: bool,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> Any:
     result = await awaitable
     if is_stream:
@@ -123,6 +130,7 @@ async def _await_result(
                 requested_model,
                 started,
                 buffer,
+                input_bytes,
             )
         return _wrap_sync_stream(
             result,
@@ -134,6 +142,7 @@ async def _await_result(
             requested_model,
             started,
             buffer,
+            input_bytes,
         )
     usage = value(result, "usage")
     if usage is not None:
@@ -193,31 +202,32 @@ def _wrap_sync_stream(
     model: Any,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> Iterator[Any]:
-    usage = None
-    response_model = model
-    request_id = None
-    for chunk in stream:
-        chunk_usage = value(chunk, "usage")
-        if chunk_usage is not None:
-            usage = chunk_usage
-        response_model = value(chunk, "model", response_model)
-        request_id = value(chunk, "id", request_id)
-        yield chunk
-    if usage is not None:
-        safe_capture_provider_usage(
-            nozle,
-            customer_id,
-            metric_code,
-            feature=feature,
-            cost_meter_code=cost_meter_code,
-            provider="openai",
-            model=response_model,
-            request_id=request_id,
-            usage=normalize_openai_usage(usage),
-            latency_ms=int((time.monotonic() - started) * 1000),
-            buffer=buffer,
-        )
+    collector = StreamUsageCollector()
+    ended = False
+    try:
+        for chunk in stream:
+            collector.add(chunk)
+            yield chunk
+        ended = True
+    finally:
+        # Also runs when the consumer stops early (GeneratorExit) or the stream raises.
+        found = collector.result(ended, input_bytes)
+        if found is not None:
+            safe_capture_provider_usage(
+                nozle,
+                customer_id,
+                metric_code,
+                feature=feature,
+                cost_meter_code=cost_meter_code,
+                provider="openai",
+                model=found.model or model,
+                request_id=found.id,
+                usage=found.usage,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                buffer=buffer,
+            )
 
 
 async def _wrap_async_stream(
@@ -230,28 +240,29 @@ async def _wrap_async_stream(
     model: Any,
     started: float,
     buffer: Optional[AnyEventBuffer],
+    input_bytes: int,
 ) -> AsyncIterator[Any]:
-    usage = None
-    response_model = model
-    request_id = None
-    async for chunk in stream:
-        chunk_usage = value(chunk, "usage")
-        if chunk_usage is not None:
-            usage = chunk_usage
-        response_model = value(chunk, "model", response_model)
-        request_id = value(chunk, "id", request_id)
-        yield chunk
-    if usage is not None:
-        await safe_capture_provider_usage_async(
-            nozle,
-            customer_id,
-            metric_code,
-            feature=feature,
-            cost_meter_code=cost_meter_code,
-            provider="openai",
-            model=response_model,
-            request_id=request_id,
-            usage=normalize_openai_usage(usage),
-            latency_ms=int((time.monotonic() - started) * 1000),
-            buffer=buffer,
-        )
+    collector = StreamUsageCollector()
+    ended = False
+    try:
+        async for chunk in stream:
+            collector.add(chunk)
+            yield chunk
+        ended = True
+    finally:
+        # Also runs when the consumer closes the generator early (aclose) or the stream raises.
+        found = collector.result(ended, input_bytes)
+        if found is not None:
+            await safe_capture_provider_usage_async(
+                nozle,
+                customer_id,
+                metric_code,
+                feature=feature,
+                cost_meter_code=cost_meter_code,
+                provider="openai",
+                model=found.model or model,
+                request_id=found.id,
+                usage=found.usage,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                buffer=buffer,
+            )

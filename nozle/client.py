@@ -890,7 +890,13 @@ class _BaseNozle(Resource[M]):
         output_tokens: int,
         cached_input_tokens: int = 0,
         cache_write_tokens: int = 0,
+        cache_write_1h_tokens: int = 0,
         reasoning_tokens: int = 0,
+        audio_input_tokens: int = 0,
+        audio_output_tokens: int = 0,
+        image_input_tokens: int = 0,
+        image_output_tokens: int = 0,
+        service_tier: Optional[str] = None,
         feature_code: str = "llm_tokens",
         provider: str = "",
         request_id: Optional[str] = None,
@@ -901,34 +907,51 @@ class _BaseNozle(Resource[M]):
         """Record one LLM call's token usage that your code read itself.
 
         ``input_tokens`` counts all input, including cached input and cache writes;
-        ``output_tokens`` counts all output, including reasoning. Recording the same
-        ``request_id`` twice records one event. Raises the first delivery error.
+        ``output_tokens`` counts all output, including reasoning. ``cache_write_tokens`` is the
+        default (5 minute) cache write and ``cache_write_1h_tokens`` the 1 hour one. Pass
+        ``service_tier="batch"`` for a batch-tier call. Recording the same ``request_id`` twice
+        records one event. Raises the first delivery error.
         """
         from nozle.integrations._common import (
             ProviderTokenUsage,
             capture_usage_steps,
             compact_categories,
+            take,
             token_count,
         )
 
         require_non_empty(customer_id, "customer_id", "record_usage")
         total_input = token_count(input_tokens)
         total_output = token_count(output_tokens)
-        cached = min(total_input, token_count(cached_input_tokens))
-        cache_write = min(total_input - cached, token_count(cache_write_tokens))
-        reasoning = min(total_output, token_count(reasoning_tokens))
+        inputs, input_rest = take(
+            total_input,
+            cached_input_tokens,
+            cache_write_tokens,
+            cache_write_1h_tokens,
+            audio_input_tokens,
+            image_input_tokens,
+        )
+        outputs, output_rest = take(
+            total_output, reasoning_tokens, audio_output_tokens, image_output_tokens
+        )
         usage = ProviderTokenUsage(
             feature_input_tokens=total_input,
             feature_output_tokens=total_output,
             categories=compact_categories(
                 (
-                    ("input", total_input - cached - cache_write),
-                    ("cached_input", cached),
-                    ("cache_write", cache_write),
-                    ("output", total_output - reasoning),
-                    ("reasoning", reasoning),
+                    ("input", input_rest),
+                    ("cached_input", inputs[0]),
+                    ("cache_write", inputs[1]),
+                    ("cache_write_1h", inputs[2]),
+                    ("audio_input", inputs[3]),
+                    ("image_input", inputs[4]),
+                    ("output", output_rest),
+                    ("reasoning", outputs[0]),
+                    ("audio_output", outputs[1]),
+                    ("image_output", outputs[2]),
                 )
             ),
+            service_tier="batch" if service_tier == "batch" else None,
         )
         errors = yield from capture_usage_steps(
             self,
