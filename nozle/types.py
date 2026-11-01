@@ -55,6 +55,10 @@ class CanPolicy(TypedDict, total=False):
     version_id: str
     mode: Literal["allow", "warn", "deny"]
     on_unavailable: Literal["allow", "warn", "deny"]
+    #: What the policy does for a feature with no Cost Rule (Engine 2.39.0+; absent on older Engines).
+    on_not_configured: Literal["allow", "warn", "deny"]
+    #: Target of the policy that decided the call (Engine 2.40.0+; absent on older Engines).
+    scope: Literal["customer", "plan", "feature", "organization"]
     minimum_margin_amount: str
     minimum_margin_percent: str
     maximum_estimated_cost: str
