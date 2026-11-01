@@ -8,6 +8,19 @@ from typing import Any, Dict, Optional, Type
 NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found"
 
 
+class TrialErrorCode(str, Enum):
+    """Codes of a refused trial update: ``error_details["trial"]`` of a 422, except
+    ``PLAN_CHANGE_PENDING`` (a 409 ``code``). Test with
+    ``error.has_code(TrialErrorCode.NOT_ACTIVE)``; members equal their string value."""
+
+    INVALID_PARAMS = "trial_invalid_params"
+    NOT_ACTIVE = "trial_not_active"
+    EXTENSION_TOO_LONG = "trial_extension_too_long"
+    END_IN_PAST = "trial_end_in_past"
+    PAYMENT_METHOD_REQUIRED = "payment_method_required"
+    PLAN_CHANGE_PENDING = "plan_change_pending"
+
+
 class RefusalReason(str, Enum):
     """Why ``can()``, ``usage.check()``, ``usage.track()`` or a hold answers ``allowed: False``
     (its ``reason``), and the ``code`` of the LLM proxy's 402/429 refusals.

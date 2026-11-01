@@ -462,6 +462,34 @@ class CancelSubscriptionResult(TypedDict):
     subscription: SubscriptionCancellation
 
 
+class SubscriptionTrialUpdate(TypedDict, total=False):
+    """What ``update_subscription`` does to a trial: exactly one of ``extend_days``, ``ends_at`` or
+    ``convert`` (``True``), plus an optional ``reason`` (up to 500 characters)."""
+
+    extend_days: int
+    ends_at: str
+    convert: Literal[True]
+    reason: str
+
+
+class _TrialSubscriptionRequired(TypedDict):
+    external_id: str
+    status: str
+    trial_ends_at: Optional[str]
+    in_trial: bool
+
+
+class TrialSubscription(_TrialSubscriptionRequired, total=False):
+    """The subscription as Core returns it; the fields typed here are the trial's."""
+
+    trial_ended_at: Optional[str]
+    ending_at: Optional[str]
+
+
+class UpdateSubscriptionResult(TypedDict):
+    subscription: TrialSubscription
+
+
 SubscriptionTransitionOperation = Literal["cancel", "downgrade", "uncancel"]
 SubscriptionTransitionTiming = Literal["end_of_period", "immediate"]
 SubscriptionTransitionBillingAnchor = Literal["keep_anchor", "reset_anchor"]
