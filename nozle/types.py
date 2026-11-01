@@ -93,6 +93,9 @@ class Budget(TypedDict):
     status: BudgetStatus
     #: Time of the latest event booked into ``spent``; ``None`` before any.
     as_of: Optional[str]
+    #: When counting began: ``period_start`` once earlier spend in the period is
+    #: counted, else when the count started; ``None`` before any. Engine 2.38.0.
+    counted_from: Optional[str]
 
 
 class BudgetList(TypedDict):
