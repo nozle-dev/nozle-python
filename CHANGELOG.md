@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.30.0 — 2026-11-01
+
+### Added
+
+- ``CanPolicy["on_not_configured"]`` (Engine 2.39.0): what the margin policy does for a feature with no Cost Rule (`allow`, `warn` or `deny`).
+- ``CanPolicy["scope"]`` (Engine 2.40.0): the target of the policy that decided the call (`customer`, `plan`, `feature` or `organization`).
+
+Both are optional: older Engines do not send them.
+
 ## 0.29.0 — 2026-11-01
 
 ### Added

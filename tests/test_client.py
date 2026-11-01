@@ -290,6 +290,38 @@ def test_can_sends_metadata_as_json_query(requests_mock: requests_mock.Mocker) -
     }
 
 
+def test_can_policy_passes_on_not_configured_and_scope_through(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    policy = {
+        "version_id": "v1",
+        "mode": "deny",
+        "on_unavailable": "warn",
+        "maximum_snapshot_age_seconds": 300,
+        "decision": "allow",
+        "reason": "within_policy",
+    }
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+    url = "https://api.example/engine/api/v1/can"
+
+    requests_mock.get(
+        url,
+        json={
+            "allowed": True,
+            "used": 1,
+            "policy": {**policy, "on_not_configured": "deny", "scope": "plan"},
+        },
+    )
+    result = client.can("cust_1", "seats")
+    assert result["policy"]["on_not_configured"] == "deny"
+    assert result["policy"]["scope"] == "plan"
+
+    requests_mock.get(url, json={"allowed": True, "used": 1, "policy": policy})
+    older = client.can("cust_1", "seats")
+    assert "on_not_configured" not in older["policy"]
+    assert "scope" not in older["policy"]
+
+
 def test_can_sends_subscription_and_entity_selectors(
     requests_mock: requests_mock.Mocker,
 ) -> None:
