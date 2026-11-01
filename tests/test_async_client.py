@@ -107,6 +107,7 @@ CALLS: List[Callable[[Any], Any]] = [
     ),
     lambda n: n.subscribe("cust", "pro"),
     lambda n: n.cancel_subscription("cust", "sub_1", "immediate"),
+    lambda n: n.events.void("t1", reason="wrong quantity"),
     lambda n: n.extend_trial("sub_1", days=7, reason="call"),
     lambda n: n.convert_trial("sub_1"),
     lambda n: n.update_subscription("sub_1", {"ends_at": STAMP}),

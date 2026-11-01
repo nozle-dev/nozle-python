@@ -9,6 +9,7 @@ import requests_mock
 
 from nozle import (
     CanResult,
+    EventVoidErrorCode,
     Nozle,
     NozleAPIError,
     NozleAuthenticationError,
@@ -1337,3 +1338,68 @@ def test_plan_family_selection_is_validated_before_network(
     with pytest.raises(NozleValidationError, match=message):
         client.subscribe("cust", **kwargs)
     assert requests_mock.request_history == []
+
+
+VOID_URL = "https://api.nozle.app/engine/api/v1/events/tx%2F123/void"
+VOID_OK = {
+    "void": {
+        "transaction_id": "tx/123",
+        "status": "voided",
+        "reason": "wrong quantity",
+        "voided_at": "2026-11-01T12:00:00Z",
+        "actor": "api_key:k1",
+        "effects": {
+            "event": "voided",
+            "usage": "reversed",
+            "credits": "not_applicable",
+            "cost": "pending",
+            "margin": "pending",
+        },
+    }
+}
+
+
+def test_events_void_posts_reason_and_returns_void(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.post(VOID_URL, json=VOID_OK)
+
+    result = Nozle("sk_test").events.void("tx/123", reason="wrong quantity")
+
+    assert result == VOID_OK
+    assert requests_mock.last_request.json() == {"reason": "wrong quantity"}
+    assert requests_mock.last_request.headers["Authorization"] == "Bearer sk_test"
+
+
+def test_events_void_validates_before_any_request(requests_mock: requests_mock.Mocker) -> None:
+    client = Nozle("sk_test")
+
+    with pytest.raises(NozleValidationError):
+        client.events.void("", reason="x")
+    with pytest.raises(NozleValidationError):
+        client.events.void("tx", reason="")
+    with pytest.raises(NozleValidationError):
+        client.events.void("tx", reason="x" * 501)
+    with pytest.raises(NozleAuthenticationError):
+        Nozle("pk_browser").events.void("tx", reason="x")
+
+    assert requests_mock.request_history == []
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (404, EventVoidErrorCode.EVENT_NOT_FOUND),
+        (409, EventVoidErrorCode.PERIOD_INVOICED),
+        (422, EventVoidErrorCode.REASON_REQUIRED),
+    ],
+)
+def test_events_void_errors_map_to_has_code(
+    requests_mock: requests_mock.Mocker, status: int, code: EventVoidErrorCode
+) -> None:
+    requests_mock.post(VOID_URL, status_code=status, json={"error": code.value, "message": "no"})
+
+    with pytest.raises(NozleAPIError) as caught:
+        Nozle("sk_test").events.void("tx/123", reason="x")
+
+    assert caught.value.status_code == status
+    assert caught.value.has_code(code)
+    assert not caught.value.has_code(EventVoidErrorCode.TRANSACTION_VOIDED)

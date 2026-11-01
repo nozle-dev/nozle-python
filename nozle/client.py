@@ -140,7 +140,7 @@ class _BaseNozle(Resource[M]):
         self.margin = MarginClient(
             self.base_url, self.api_key, timeout=self.timeout, _transport=self._engine
         )
-        self.events = EventsNamespace()
+        self.events = EventsNamespace(self._engine, self.api_key)
         self.cost_events = CostEventsNamespace(self._engine, self.api_key)
         self.customers = CustomersNamespace(self._events, self.api_key, self._engine)
         self.cost_intelligence = CostIntelligenceNamespace(self._engine, self.api_key)

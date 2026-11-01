@@ -462,6 +462,33 @@ class CancelSubscriptionResult(TypedDict):
     subscription: SubscriptionCancellation
 
 
+class EventVoidEffects(TypedDict):
+    """What a void did to each downstream record: ``pending`` while its async step runs,
+    ``not_applicable`` when there was nothing to undo."""
+
+    event: Literal["voided"]
+    usage: Literal["reversed", "recomputed", "not_applicable", "pending"]
+    credits: Literal["refunded", "not_applicable", "pending"]
+    cost: Literal["reversed", "not_applicable", "pending"]
+    margin: Literal["reversed", "not_applicable", "pending"]
+
+
+class EventVoid(TypedDict):
+    transaction_id: str
+    #: ``voided`` for this call, ``already_voided`` for a replay (no side effects).
+    status: Literal["voided", "already_voided"]
+    reason: str
+    #: ISO 8601, server time.
+    voided_at: str
+    #: ``api_key:<id>``.
+    actor: str
+    effects: EventVoidEffects
+
+
+class EventVoidResult(TypedDict):
+    void: EventVoid
+
+
 class SubscriptionTrialUpdate(TypedDict, total=False):
     """What ``update_subscription`` does to a trial: exactly one of ``extend_days``, ``ends_at`` or
     ``convert`` (``True``), plus an optional ``reason`` (up to 500 characters)."""

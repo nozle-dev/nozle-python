@@ -559,6 +559,24 @@ For a cost attributable to a customer but not one Feature Event, provide
 `external_customer_id` instead of `parent_transaction_id`. Cost Event methods require a
 secret key.
 
+### Voiding an event
+
+`events.void()` (secret key) cancels a recorded event by its transaction ID and reverses its
+usage, credits, cost and margin. It works only while no finalized, open or pending invoice covers
+the event's time; otherwise it raises `NozleAPIError` `period_invoiced` and changes nothing. It is
+idempotent: a replay returns `status: "already_voided"`.
+
+```python
+result = nozle.events.void("tx_123", reason="wrong quantity")  # reason: 1 to 500 characters
+# result["void"]["status"]: "voided" | "already_voided"
+# result["void"]["effects"]["credits"]: "refunded" | "not_applicable" | "pending"
+```
+
+Refusals: `event_not_found` (404), `period_invoiced` (409), `reason_required` (422); test with
+`error.has_code(EventVoidErrorCode.PERIOD_INVOICED)`. A voided ID cannot be tracked again
+(`transaction_voided`, 409): send the corrected event with a new `transaction_id`. An effect is
+`pending` while its background step runs; replay the call to read the current state.
+
 ### Batching events
 
 `track_batch()` sends many events through Engine's `/events/batch` in one call. It takes the
