@@ -21,6 +21,17 @@ class TrialErrorCode(str, Enum):
     PLAN_CHANGE_PENDING = "plan_change_pending"
 
 
+class EventVoidErrorCode(str, Enum):
+    """Codes of a refused ``events.void``, and of a ``track`` of a voided ID
+    (``TRANSACTION_VOIDED``, 409). Test with
+    ``error.has_code(EventVoidErrorCode.PERIOD_INVOICED)``."""
+
+    EVENT_NOT_FOUND = "event_not_found"
+    PERIOD_INVOICED = "period_invoiced"
+    REASON_REQUIRED = "reason_required"
+    TRANSACTION_VOIDED = "transaction_voided"
+
+
 class RefusalReason(str, Enum):
     """Why ``can()``, ``usage.check()``, ``usage.track()`` or a hold answers ``allowed: False``
     (its ``reason``), and the ``code`` of the LLM proxy's 402/429 refusals.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.32.0 — unreleased
+
+Needs an Engine with event void (NLD-8).
+
+### Added
+
+- `nozle.events.void(transaction_id, reason=...)` (`POST /events/{transaction_id}/void`, Engine): voids a recorded usage event and reverses its usage, credits, cost and margin. Idempotent: a replay returns `status: "already_voided"`. The result is `{"void": {...}}` with `status`, `reason`, `voided_at`, `actor` and `effects` (each `reversed`, `recomputed`, `refunded`, `not_applicable` or `pending`). Works on `Nozle` and `AsyncNozle`.
+- `EventVoidErrorCode` (`event_not_found` 404, `period_invoiced` 409, `reason_required` 422, `transaction_voided` 409 on a later `track` of that ID) for `error.has_code(...)`.
+- Types `EventVoid`, `EventVoidEffects`, `EventVoidResult`.
+
 ## 0.31.0 — 2026-11-01
 
 Needs a Core with trial updates (NLD-4).
