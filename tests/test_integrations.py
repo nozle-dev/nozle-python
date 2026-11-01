@@ -33,6 +33,7 @@ def assert_tracking_contract(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "latency_ms": properties["latency_ms"],
+        "usage_source": "reported",
         "feature": "assistant",
     }
     assert isinstance(properties["latency_ms"], int)
