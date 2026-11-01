@@ -177,6 +177,25 @@ nozle.cancel_subscription(
 )
 ```
 
+Extend or end a trial (server-only, `sk_` key). `trial` takes exactly one of `extend_days`,
+`ends_at` or `convert`, plus an optional `reason` (up to 500 characters); none or several raises
+`NozleValidationError` before any request. An extension is at most 90 days and a trial lasts at
+most 365 days in total (the server enforces both). `AsyncNozle` awaits the same calls.
+
+```python
+nozle.extend_trial("subscription-123", days=14, reason="sales call")
+nozle.extend_trial("subscription-123", ends_at="2026-12-01T00:00:00Z")  # 30+ minutes ahead
+result = nozle.convert_trial("subscription-123")  # ends the trial now, starts paid billing
+# result["subscription"]["in_trial"] is False; ["trial_ends_at"] and ["trial_ended_at"] are set
+nozle.update_subscription("subscription-123", {"extend_days": 7})  # the general call
+```
+
+Convert bills at period end on a pay-in-arrears plan and invoices at once on pay-in-advance;
+payment follows the normal collection flow and a failed payment does not undo the conversion.
+Refusals raise `NozleAPIError`; test with `error.has_code(TrialErrorCode.NOT_ACTIVE)`
+(`INVALID_PARAMS`, `NOT_ACTIVE`, `EXTENSION_TOO_LONG`, `END_IN_PAST`, `PAYMENT_METHOD_REQUIRED`,
+and `PLAN_CHANGE_PENDING` as a 409). These calls are not retried.
+
 Create one payment for a mixed basket of Entity plans:
 
 ```python

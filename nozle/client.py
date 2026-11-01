@@ -70,7 +70,9 @@ from nozle.types import (
     SubscriptionTransitionPreview,
     SubscriptionTransitionRefundMode,
     SubscriptionTransitionResult,
+    SubscriptionTrialUpdate,
     TrackBatchEvent,
+    UpdateSubscriptionResult,
     WithdrawPendingSubscriptionChangeResult,
 )
 from nozle.usage import UsageNamespace
@@ -617,6 +619,93 @@ class _BaseNozle(Resource[M]):
             )
         finally:
             self._sub_cache.pop(customer_id, None)
+
+    def _update_trial_steps(
+        self, operation: str, external_id: str, trial: Mapping[str, Any]
+    ) -> Steps[UpdateSubscriptionResult]:
+        require_secret_key(self.api_key, operation)
+        require_non_empty(external_id, "external_id", operation)
+        given = [key for key in ("extend_days", "ends_at", "convert") if trial.get(key) is not None]
+        if len(given) != 1:
+            raise NozleValidationError(
+                f"{operation} needs exactly one of extend_days, ends_at or convert"
+            )
+        extend_days, ends_at = trial.get("extend_days"), trial.get("ends_at")
+        if extend_days is not None and (
+            type(extend_days) is not int or extend_days < 1  # bool is not a day count
+        ):
+            raise NozleValidationError(f"{operation} extend_days must be a positive integer")
+        if ends_at is not None:
+            try:
+                datetime.fromisoformat(str(ends_at).replace("Z", "+00:00"))
+            except ValueError:
+                raise NozleValidationError(
+                    f"{operation} ends_at must be an ISO 8601 timestamp"
+                ) from None
+        if trial.get("convert") is not None and trial["convert"] is not True:
+            raise NozleValidationError(f"{operation} convert must be True")
+        reason = trial.get("reason")
+        if reason is not None and (not isinstance(reason, str) or len(reason) > 500):
+            raise NozleValidationError(f"{operation} reason must be a string up to 500 characters")
+        body = {
+            "subscription": {
+                "trial": {k: trial[k] for k in (*given, "reason") if trial.get(k) is not None}
+            }
+        }
+        # Not marked idempotent: a repeated extension would add twice, so it is never retried.
+        return cast(
+            UpdateSubscriptionResult,
+            (
+                yield self._events.call(
+                    operation,
+                    "PUT",
+                    f"/api/v1/subscriptions/{quote(external_id, safe='')}",
+                    json_body=body,
+                )
+            ),
+        )
+
+    @endpoint
+    def update_subscription(
+        self, external_id: str, trial: SubscriptionTrialUpdate
+    ) -> Steps[UpdateSubscriptionResult]:
+        """Change a subscription's trial (``PUT /subscriptions/{id}``, Core).
+
+        ``trial`` has exactly one of ``extend_days`` (adds to the current end), ``ends_at``
+        (absolute new end, at least 30 minutes ahead) or ``convert=True`` (end the trial now and
+        start paid billing), plus an optional ``reason``. Raises ``NozleValidationError`` before
+        any request for none or several. A refusal raises ``NozleAPIError``; test it with
+        ``has_code(TrialErrorCode...)``.
+        """
+        result = yield from self._update_trial_steps("update_subscription", external_id, trial)
+        return result
+
+    @endpoint
+    def extend_trial(
+        self,
+        external_id: str,
+        *,
+        days: Optional[int] = None,
+        ends_at: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Steps[UpdateSubscriptionResult]:
+        """Extend a trial by ``days``, or move its end to ``ends_at`` (ISO 8601). Give one."""
+        trial: Dict[str, Any] = {"extend_days": days, "ends_at": ends_at, "reason": reason}
+        result = yield from self._update_trial_steps(
+            "extend_trial", external_id, {k: v for k, v in trial.items() if v is not None}
+        )
+        return result
+
+    @endpoint
+    def convert_trial(
+        self, external_id: str, *, reason: Optional[str] = None
+    ) -> Steps[UpdateSubscriptionResult]:
+        """End a trial now and start paid billing per the plan's rules."""
+        trial: Dict[str, Any] = {"convert": True, "reason": reason}
+        result = yield from self._update_trial_steps(
+            "convert_trial", external_id, {k: v for k, v in trial.items() if v is not None}
+        )
+        return result
 
     @endpoint
     def preview_subscription_transition(

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.31.0 — 2026-11-01
+
+Needs a Core with trial updates (NLD-4).
+
+### Added
+
+- `nozle.update_subscription(external_id, trial)` (`PUT /subscriptions/{id}`, Core): `trial` has exactly one of `extend_days`, `ends_at` or `convert` (`True`), plus an optional `reason`. None or several raises `NozleValidationError` before any request. The result is `{"subscription": ...}` with `trial_ends_at` and `in_trial`. Works on `Nozle` and `AsyncNozle`.
+- `extend_trial(external_id, days=, ends_at=, reason=)` and `convert_trial(external_id, reason=)`.
+- `TrialErrorCode` (`trial_invalid_params`, `trial_not_active`, `trial_extension_too_long`, `trial_end_in_past`, `payment_method_required`, `plan_change_pending`) for `error.has_code(...)`.
+- Types `SubscriptionTrialUpdate`, `TrialSubscription`, `UpdateSubscriptionResult`.
+
 ## 0.30.0 — 2026-11-01
 
 ### Added

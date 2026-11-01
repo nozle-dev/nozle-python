@@ -14,6 +14,7 @@ from nozle import (
     NozleAuthenticationError,
     NozleTransportError,
     NozleValidationError,
+    TrialErrorCode,
     __version__,
 )
 
@@ -733,6 +734,146 @@ def test_cancel_subscription_rejects_publishable_key_before_network(
     with pytest.raises(NozleValidationError, match="secret key"):
         Nozle("pk_browser").cancel_subscription("cust_1", "sub_1")
     assert requests_mock.request_history == []
+
+
+TRIAL_URL = "https://api.nozle.app/core/api/v1/subscriptions/sub%2F1"
+TRIAL_OK = {
+    "subscription": {
+        "external_id": "sub/1",
+        "status": "active",
+        "trial_ends_at": "2026-12-01T00:00:00Z",
+        "in_trial": True,
+    }
+}
+
+
+@pytest.mark.parametrize(
+    "trial",
+    [{"extend_days": 7}, {"ends_at": "2026-12-01T00:00:00Z"}, {"convert": True}],
+)
+def test_update_subscription_sends_each_trial_form_to_core(
+    requests_mock: requests_mock.Mocker, trial: dict
+) -> None:
+    requests_mock.put(TRIAL_URL, json=TRIAL_OK)
+
+    result = Nozle("sk_test").update_subscription("sub/1", trial)  # type: ignore[arg-type]
+
+    assert requests_mock.last_request.json() == {"subscription": {"trial": trial}}
+    assert result["subscription"]["in_trial"] is True
+    assert result["subscription"]["trial_ends_at"] == "2026-12-01T00:00:00Z"
+
+
+@pytest.mark.parametrize(
+    "trial",
+    [
+        {},
+        {"reason": "x"},
+        {"extend_days": 3, "convert": True},
+        {"extend_days": 3, "ends_at": "2026-12-01T00:00:00Z"},
+        {"extend_days": 0},
+        {"extend_days": 1.5},
+        {"extend_days": True},
+        {"ends_at": "tomorrow"},
+        {"convert": False},
+        {"convert": True, "reason": "x" * 501},
+    ],
+)
+def test_update_subscription_rejects_bad_trial_before_network(
+    requests_mock: requests_mock.Mocker, trial: dict
+) -> None:
+    with pytest.raises(NozleValidationError):
+        Nozle("sk_test").update_subscription("sub_1", trial)  # type: ignore[arg-type]
+    assert requests_mock.request_history == []
+
+
+def test_update_subscription_rejects_missing_id_and_publishable_key(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    with pytest.raises(NozleValidationError, match="external_id"):
+        Nozle("sk_test").update_subscription("", {"convert": True})
+    with pytest.raises(NozleValidationError, match="secret key"):
+        Nozle("pk_browser").update_subscription("sub_1", {"convert": True})
+    assert requests_mock.request_history == []
+
+
+def test_extend_trial_sends_days_or_ends_at_with_reason(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.put(TRIAL_URL, json=TRIAL_OK)
+    client = Nozle("sk_test")
+
+    client.extend_trial("sub/1", days=14, reason="sales call")
+    assert requests_mock.last_request.json() == {
+        "subscription": {"trial": {"extend_days": 14, "reason": "sales call"}}
+    }
+    client.extend_trial("sub/1", ends_at="2026-12-01T00:00:00Z")
+    assert requests_mock.last_request.json() == {
+        "subscription": {"trial": {"ends_at": "2026-12-01T00:00:00Z"}}
+    }
+    with pytest.raises(NozleValidationError):
+        client.extend_trial("sub/1")
+    with pytest.raises(NozleValidationError):
+        client.extend_trial("sub/1", days=1, ends_at="2026-12-01T00:00:00Z")
+    assert len(requests_mock.request_history) == 2
+
+
+def test_convert_trial_sends_convert_true(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.put(TRIAL_URL, json=TRIAL_OK)
+
+    Nozle("sk_test").convert_trial("sub/1", reason="customer asked")
+
+    assert requests_mock.last_request.json() == {
+        "subscription": {"trial": {"convert": True, "reason": "customer asked"}}
+    }
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        TrialErrorCode.INVALID_PARAMS,
+        TrialErrorCode.NOT_ACTIVE,
+        TrialErrorCode.EXTENSION_TOO_LONG,
+        TrialErrorCode.END_IN_PAST,
+        TrialErrorCode.PAYMENT_METHOD_REQUIRED,
+    ],
+)
+def test_trial_422_codes_map_to_has_code(
+    requests_mock: requests_mock.Mocker, code: TrialErrorCode
+) -> None:
+    requests_mock.put(
+        TRIAL_URL,
+        status_code=422,
+        json={"code": "validation_errors", "error_details": {"trial": [code.value]}},
+    )
+
+    with pytest.raises(NozleAPIError) as caught:
+        Nozle("sk_test").convert_trial("sub/1")
+
+    assert caught.value.status_code == 422
+    assert caught.value.has_code(code)
+    other = TrialErrorCode.NOT_ACTIVE
+    if code == other:
+        other = TrialErrorCode.END_IN_PAST
+    assert not caught.value.has_code(other)
+
+
+def test_trial_409_plan_change_pending(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.put(TRIAL_URL, status_code=409, json={"code": "plan_change_pending"})
+
+    with pytest.raises(NozleAPIError) as caught:
+        Nozle("sk_test").convert_trial("sub/1")
+
+    assert caught.value.status_code == 409
+    assert caught.value.has_code(TrialErrorCode.PLAN_CHANGE_PENDING)
+
+
+def test_trial_update_is_not_retried(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.put(TRIAL_URL, status_code=503, json={})
+
+    with pytest.raises(NozleAPIError):
+        Nozle("sk_test").extend_trial("sub/1", days=3)
+
+    assert len(requests_mock.request_history) == 1
 
 
 def test_subscription_transition_preview_leaves_defaults_to_merchant_policy(
