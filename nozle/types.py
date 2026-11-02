@@ -1577,3 +1577,55 @@ class _BillingStateImportRequired(TypedDict):
 class BillingStateImport(_BillingStateImportRequired, total=False):
     id: str
     external_entity_id: str
+
+
+TaxProvider = Literal["nozle", "stripe_tax"]
+
+
+class _BillingEntityRequired(TypedDict):
+    nozle_id: str
+    code: str
+    name: str
+
+
+class BillingEntity(_BillingEntityRequired, total=False):
+    """A billing entity. ``tax_provider`` and ``provider_tax_code`` are the Stripe Tax settings;
+    ``taxes`` and ``selected_invoice_custom_sections`` come with ``get()`` and ``update()`` only."""
+
+    default_currency: str
+    created_at: str
+    updated_at: str
+    country: Optional[str]
+    address_line1: Optional[str]
+    address_line2: Optional[str]
+    city: Optional[str]
+    state: Optional[str]
+    zipcode: Optional[str]
+    einvoicing: bool
+    email: Optional[str]
+    legal_name: Optional[str]
+    legal_number: Optional[str]
+    timezone: str
+    net_payment_term: int
+    email_settings: List[str]
+    document_numbering: str
+    document_number_prefix: Optional[str]
+    tax_identification_number: Optional[str]
+    finalize_zero_amount_invoice: bool
+    invoice_footer: Optional[str]
+    invoice_grace_period: int
+    subscription_invoice_issuing_date_adjustment: str
+    subscription_invoice_issuing_date_anchor: str
+    document_locale: str
+    is_default: bool
+    eu_tax_management: bool
+    customer_location_required: bool
+    tax_provider: TaxProvider
+    provider_tax_code: Optional[str]
+    logo_url: Optional[str]
+    taxes: List[Dict[str, Any]]
+    selected_invoice_custom_sections: List[Dict[str, Any]]
+
+
+class BillingEntityPage(TypedDict):
+    billing_entities: List[BillingEntity]

@@ -29,6 +29,7 @@ from nozle._validation import (
     validate_idempotency_key,
 )
 from nozle.alerts import AlertsNamespace
+from nozle.billing_entities import BillingEntitiesNamespace
 from nozle.budgets import BudgetsNamespace
 from nozle.can import can_steps
 from nozle.cost_events import CostEventsNamespace
@@ -154,6 +155,7 @@ class _BaseNozle(Resource[M]):
         self.invoices = InvoicesNamespace(self._events, self.api_key)
         self.credit_notes = CreditNotesNamespace(self._events, self.api_key)
         self.alerts = AlertsNamespace(self._events, self.api_key)
+        self.billing_entities = BillingEntitiesNamespace(self._events, self.api_key)
         self.plan_versions = PlanVersionsNamespace(self._events, self.api_key)
         self._sub_cache: dict[str, str] = {}
 
