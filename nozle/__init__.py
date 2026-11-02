@@ -1,5 +1,6 @@
 from nozle._version import __version__
 from nozle.alerts import AlertsNamespace
+from nozle.billing_entities import BillingEntitiesNamespace
 from nozle.budgets import BudgetsNamespace
 from nozle.client import AsyncNozle, Nozle
 from nozle.cost_events import CostEventsNamespace
@@ -46,6 +47,8 @@ from nozle.track_batch import TrackBatchEventResult, TrackBatchResult
 from nozle.types import (
     Alert,
     AlertPage,
+    BillingEntity,
+    BillingEntityPage,
     BillingStateImport,
     BillingStateImportRequest,
     BillingStateImportSubscription,
@@ -172,6 +175,7 @@ from nozle.types import (
     SubscriptionTrialUpdate,
     TaxIdStatus,
     TaxIdType,
+    TaxProvider,
     TaxTreatment,
     TrackBatchEvent,
     TrackOptions,
@@ -216,6 +220,9 @@ __all__ = [
     "AlertPage",
     "AlertsNamespace",
     "AsyncNozle",
+    "BillingEntitiesNamespace",
+    "BillingEntity",
+    "BillingEntityPage",
     "Budget",
     "BudgetExceededError",
     "BudgetHold",
@@ -305,6 +312,7 @@ __all__ = [
     "InvoiceTaxDetails",
     "TaxIdStatus",
     "TaxIdType",
+    "TaxProvider",
     "TaxTreatment",
     "CustomersNamespace",
     "EntityCreditBalance",

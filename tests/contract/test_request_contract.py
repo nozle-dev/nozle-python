@@ -134,6 +134,9 @@ CALLS: list[Callable[[Nozle], Any]] = [
         metadata={"ticket": "T-1"},
     ),
     lambda n: n.credit_notes.void("cn_1"),
+    lambda n: n.billing_entities.create(
+        "eu", "EU Ltd", tax_provider="stripe_tax", provider_tax_code="txcd_10000000", country="DE"
+    ),
     lambda n: n.customers.import_credit_balance(
         "cust",
         {

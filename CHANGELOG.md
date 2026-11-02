@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.36.0 — 2026-11-02
+
+Needs a Core with Stripe Tax (Core 11.32.0) to set `tax_provider="stripe_tax"`.
+
+### Added
+
+- `billing_entities.list()`, `get(code)`, `create(code, name, ...)` and `update(code, ...)` on `Nozle` and `AsyncNozle`. `tax_provider` (`"nozle"` or `"stripe_tax"`) and `provider_tax_code` are keyword arguments; any other Core field (`email`, `country`, `default_currency`, `billing_configuration`, `tax_codes`, ...) goes as a keyword too. An unknown field or tax provider raises `NozleValidationError` before any request.
+- Types `BillingEntity`, `BillingEntityPage`, `TaxProvider`.
+
 ## 0.35.0 — 2026-11-02
 
 Needs a Core with Stripe Tax (NLD-12 Part B, Core 11.32.0).

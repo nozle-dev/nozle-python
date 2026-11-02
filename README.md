@@ -484,6 +484,19 @@ nozle.credit_notes.void(note["nozle_id"])  # voids the unused credit; never undo
 
 `reason` is one of `duplicated_charge`, `product_unsatisfactory`, `order_change`, `order_cancellation`, `fraudulent_charge`, `other` (default). `refund()` raises `NozleAPIError` with code `refund_exceeds_paid_amount` and creates nothing when less was paid than the items are worth; pass `credit_remainder=True` to refund what was paid and credit the rest.
 
+### Billing entities
+
+```python
+nozle.billing_entities.create(
+    "eu", "Acme GmbH", country="DE", tax_provider="stripe_tax", provider_tax_code="txcd_10000000"
+)
+nozle.billing_entities.update("eu", tax_provider="nozle")  # only the given fields change
+nozle.billing_entities.get("eu")["tax_provider"]
+nozle.billing_entities.list()["billing_entities"]
+```
+
+`tax_provider` is `"nozle"` or `"stripe_tax"` (needs a connected Stripe account). Other Core fields go as keywords; an unknown field raises `NozleValidationError`.
+
 The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `max_retries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list(customer_id=..., invoice_number=...)` before trying again. Test errors with `error.has_code(CANNOT_REFUND_UNPAID_INVOICE)` (also `HIGHER_THAN_REMAINING_INVOICE_AMOUNT`, `HIGHER_THAN_REMAINING_FEE_AMOUNT`, `DOES_NOT_MATCH_ITEM_AMOUNTS`, `INVALID_TYPE_OR_STATUS`, `NO_VOIDABLE_AMOUNT`). Nozle stores only the provider's refund id and status, never card or bank details.
 
 ## Existing operations

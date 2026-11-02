@@ -999,6 +999,9 @@
       ],
       "type": "string"
      },
+     "customer_location_required": {
+      "type": "boolean"
+     },
      "default_currency": {
       "enum": [
        "AED",
@@ -1155,6 +1158,9 @@
       ],
       "type": "string"
      },
+     "einvoicing": {
+      "type": "boolean"
+     },
      "email": {
       "type": [
        "string",
@@ -1201,6 +1207,12 @@
      "net_payment_term": {
       "type": "integer"
      },
+     "provider_tax_code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "state": {
       "type": [
        "string",
@@ -1212,6 +1224,13 @@
        "string",
        "null"
       ]
+     },
+     "tax_provider": {
+      "enum": [
+       "nozle",
+       "stripe_tax"
+      ],
+      "type": "string"
      },
      "timezone": {
       "enum": [
@@ -2728,15 +2747,15 @@
       },
       "type": "array"
      },
-     "tax_identification_number": {
-      "type": [
-       "string",
-       "null"
-      ]
-     },
      "tax_exempt": {
       "type": [
        "boolean",
+       "null"
+      ]
+     },
+     "tax_identification_number": {
+      "type": [
+       "string",
        "null"
       ]
      },
@@ -10174,6 +10193,9 @@
     ],
     "type": "string"
    },
+   "customer_location_required": {
+    "type": "boolean"
+   },
    "default_currency": {
     "enum": [
      "AED",
@@ -10330,6 +10352,9 @@
     ],
     "type": "string"
    },
+   "einvoicing": {
+    "type": "boolean"
+   },
    "email": {
     "type": [
      "string",
@@ -10382,6 +10407,12 @@
    "net_payment_term": {
     "type": "integer"
    },
+   "provider_tax_code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
    "state": {
     "type": [
      "string",
@@ -10399,6 +10430,13 @@
      "string",
      "null"
     ]
+   },
+   "tax_provider": {
+    "enum": [
+     "nozle",
+     "stripe_tax"
+    ],
+    "type": "string"
    },
    "timezone": {
     "enum": [
