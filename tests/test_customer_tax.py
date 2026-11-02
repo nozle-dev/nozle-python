@@ -42,11 +42,13 @@ def test_upsert_maps_address_and_tax_id(requests_mock: requests_mock.Mocker) -> 
         },
         shipping_address={"line1": "Dock 2", "country": "DE"},
         tax_id={"type": "eu_vat", "value": "DE811128135"},
+        tax_exempt=True,
     )
     assert route.last_request.json() == {
         "customer": {
             "external_id": "c1",
             "customer_type": "company",
+            "tax_exempt": True,
             "legal_name": "Acme GmbH",
             "address_line1": "Main St 1",
             "address_line2": "Top",

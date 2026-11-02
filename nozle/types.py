@@ -735,6 +735,7 @@ class CustomerUpsertResult(_CustomerUpsertResultRequired, total=False):
     email: str
     tax_identification_type: Optional[TaxIdType]
     tax_identification_status: TaxIdStatus
+    tax_exempt: bool
     tax_treatment: TaxTreatment
     #: Non-blocking notes on a write, for example ``country_mismatch``. Only on upsert responses.
     tax_identification_warnings: List[str]
@@ -748,6 +749,11 @@ class InvoiceTaxDetails(TypedDict, total=False):
     tax_identification_consultation_number: Optional[str]
     customer_country: Optional[str]
     seller_tax_identification_number: Optional[str]
+    #: Set when Stripe Tax computed the tax.
+    provider: Optional[Literal["stripe_tax"]]
+    calculation_id: Optional[str]
+    transaction_id: Optional[str]
+    taxability_reasons: Optional[List[str]]
 
 
 class CheckAndDeductResult(TypedDict):

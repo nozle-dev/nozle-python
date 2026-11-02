@@ -58,6 +58,7 @@ class CustomersNamespace(Resource[M]):
         shipping_address: CustomerAddress | None = None,
         tax_id: CustomerTaxId | None = None,
         clear_tax_id: bool = False,
+        tax_exempt: bool | None = None,
     ) -> Steps[CustomerUpsertResult]:
         """Create or update a customer. ``tax_id`` is ``{"type": "eu_vat", "value": "..."}``;
         ``clear_tax_id=True`` removes the stored one. Core validates the format. The result
@@ -79,6 +80,8 @@ class CustomersNamespace(Resource[M]):
             customer.update(_address_to_wire(address))
         if shipping_address is not None:
             customer["shipping_address"] = _address_to_wire(shipping_address)
+        if tax_exempt is not None:
+            customer["tax_exempt"] = tax_exempt
         if tax_id is not None and clear_tax_id:
             raise NozleValidationError(f"{operation} takes tax_id or clear_tax_id, not both")
         if tax_id is not None:

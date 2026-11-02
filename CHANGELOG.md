@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.35.0 — 2026-11-02
+
+Needs a Core with Stripe Tax (NLD-12 Part B, Core 11.32.0).
+
+### Added
+
+- `customers.upsert` takes `tax_exempt`; customer results carry `tax_exempt`.
+- `InvoiceTaxDetails` carries `provider`, `calculation_id`, `transaction_id` and `taxability_reasons`.
+- `CustomerTaxErrorCode` adds the invoice tax failure codes `customer_tax_location_invalid`, `tax_id_invalid`, `stripe_tax_not_authorized`, `stripe_account_required` and `tax_provider_unavailable`.
+
 ## 0.34.0 — 2026-11-01
 
 Needs a Core with customer tax data (NLD-12).
