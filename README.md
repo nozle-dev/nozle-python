@@ -247,6 +247,8 @@ nozle.customers.upsert(
 )
 customer = nozle.customers.wait_for_tax_check("customer-123")  # timeout=10.0 seconds
 customer["tax_treatment"]  # "reverse_charge", "standard", ...
+# tax_exempt=True exempts the customer. A failed invoice tax carries a CustomerTaxErrorCode
+# such as TAX_LOCATION_INVALID, TAX_ID_INVALID or STRIPE_TAX_NOT_AUTHORIZED.
 # A checkout refuses with customer_tax_location_required (422) or customer_tax_check_pending
 # (409, error.retry_after_seconds); see CustomerTaxErrorCode.
 

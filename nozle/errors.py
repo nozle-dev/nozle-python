@@ -44,6 +44,12 @@ class CustomerTaxErrorCode(str, Enum):
     INVALID_FORMAT = "invalid_format"
     TAX_LOCATION_REQUIRED = "customer_tax_location_required"
     TAX_CHECK_PENDING = "customer_tax_check_pending"
+    # Invoice tax failures (``tax_status`` ``failed``).
+    TAX_LOCATION_INVALID = "customer_tax_location_invalid"
+    TAX_ID_INVALID = "tax_id_invalid"
+    STRIPE_TAX_NOT_AUTHORIZED = "stripe_tax_not_authorized"
+    STRIPE_ACCOUNT_REQUIRED = "stripe_account_required"
+    TAX_PROVIDER_UNAVAILABLE = "tax_provider_unavailable"
 
 
 class RefusalReason(str, Enum):
