@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.37.0 — 2026-11-03
 
 ### Added
 
+- `invoices.get_x402_requirements(invoice_id)` and `invoices.pay_with_x402(invoice_id, transaction_hash)` on `Nozle` and `AsyncNozle`: x402 (USDC on Base) payment of a finalized USD invoice. The first returns the x402 v2 requirements (camelCase keys kept) to relay to the paying agent and is safe to retry; the second pays with the on-chain transaction hash and is never retried. Needs the `stripe_x402_payments` workspace flag.
+- `X402ErrorCode` (`feature_not_enabled`, `invoice_not_payable`, `usd_required`, `stripe_required`, `invalid_format`) and types `X402Requirements`, `X402Accept`.
 - `invoices.pay_with_agent_token(invoice_id, agent_payment_token)` on `Nozle` and `AsyncNozle`: pays a finalized invoice with a Stripe Shared Payment Token an AI agent granted. Needs the `stripe_agent_payment_token` workspace flag. Never retried.
 
 ### Fixed

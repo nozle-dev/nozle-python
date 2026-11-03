@@ -34,6 +34,7 @@ from nozle.errors import (
     RefusalReason,
     TrialErrorCode,
     UsageLimitExceededError,
+    X402ErrorCode,
 )
 from nozle.event_buffer import AsyncEventBuffer, EventBuffer, EventBufferError
 from nozle.events import EventsNamespace
@@ -185,6 +186,8 @@ from nozle.types import (
     UsageDeduction,
     UsageTrackResult,
     WithdrawPendingSubscriptionChangeResult,
+    X402Accept,
+    X402Requirements,
 )
 from nozle.usage import UsageHoldsNamespace, UsageNamespace
 from nozle.webhooks import NozleWebhookEvent, WebhooksNamespace, WebhookVerificationError
@@ -237,6 +240,7 @@ __all__ = [
     "HoldResult",
     "RefusalReason",
     "TrialErrorCode",
+    "X402ErrorCode",
     "CustomerTaxErrorCode",
     "EventVoidErrorCode",
     "EventVoid",
@@ -259,6 +263,8 @@ __all__ = [
     "CreditNotesNamespace",
     "Invoice",
     "InvoicePage",
+    "X402Accept",
+    "X402Requirements",
     "InvoicesNamespace",
     "CustomerUsage",
     "NozleWebhookEvent",

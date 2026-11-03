@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import requests_mock
 
-from nozle import Nozle, NozleAPIError, NozleAuthenticationError
+from nozle import Nozle, NozleAPIError, NozleAuthenticationError, X402ErrorCode
 
 CORE = "https://api.example/core/api/v1"
 INVOICE = {"nozle_id": "inv_1", "number": "INV-1", "file_url": "https://files.example/inv_1.pdf"}
@@ -72,3 +72,86 @@ def test_pay_with_agent_token_refusal_and_secret_key(
     assert requests_mock.call_count == 1
     with pytest.raises(NozleAuthenticationError):
         Nozle("pk_test").invoices.pay_with_agent_token("inv_1", "spt_x")
+
+
+REQUIREMENTS = {
+    "x402Version": 2,
+    "accepts": [
+        {
+            "scheme": "exact",
+            "network": "eip155:8453",
+            "amount": "1000000",
+            "asset": "0xusdc",
+            "payTo": "0xdeposit",
+            "maxTimeoutSeconds": 300,
+            "extra": {"name": "USD Coin", "version": "2"},
+        }
+    ],
+    "resource": {"description": "Acme - Invoice INV-1"},
+}
+
+
+def test_get_x402_requirements_keeps_camel_case_keys(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.get(
+        f"{CORE}/invoices/inv_1/x402_requirements", json={"x402_requirements": REQUIREMENTS}
+    )
+    result = client().invoices.get_x402_requirements("inv_1")
+    assert result == REQUIREMENTS
+    assert result["accepts"][0]["payTo"] == "0xdeposit"
+    with pytest.raises(NozleAuthenticationError):
+        Nozle("pk_test").invoices.get_x402_requirements("inv_1")
+
+
+def test_get_x402_requirements_retries_get_and_refusal_code(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.get(
+        f"{CORE}/invoices/inv_1/x402_requirements",
+        [
+            {"status_code": 503, "json": {}},
+            {
+                "status_code": 403,
+                "json": {"status": 403, "error": "Forbidden", "code": "feature_not_enabled"},
+            },
+        ],
+    )
+    with pytest.raises(NozleAPIError) as caught:
+        client().invoices.get_x402_requirements("inv_1")
+    assert caught.value.has_code(X402ErrorCode.FEATURE_NOT_ENABLED)
+
+
+def test_pay_with_x402_posts_hash(requests_mock: requests_mock.Mocker) -> None:
+    route = requests_mock.post(f"{CORE}/invoices/inv_1/pay_with_x402", json={"invoice": INVOICE})
+    invoice = client().invoices.pay_with_x402("inv_1", "0x" + "ab" * 32)
+    assert invoice["nozle_id"] == "inv_1"
+    assert route.last_request.json() == {"transaction_hash": "0x" + "ab" * 32}
+    with pytest.raises(NozleAuthenticationError):
+        Nozle("pk_test").invoices.pay_with_x402("inv_1", "0x1")
+
+
+def test_pay_with_x402_refusal_is_never_retried(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.post(
+        f"{CORE}/invoices/inv_1/pay_with_x402",
+        status_code=422,
+        json={
+            "status": 422,
+            "error": "Unprocessable Entity",
+            "error_details": {"transaction_hash": ["invalid_format"]},
+        },
+    )
+    with pytest.raises(NozleAPIError) as caught:
+        client().invoices.pay_with_x402("inv_1", "nope")
+    assert caught.value.has_code(X402ErrorCode.INVALID_FORMAT)
+    assert caught.value.response_details["error_details"] == {
+        "transaction_hash": ["invalid_format"]
+    }
+    assert requests_mock.call_count == 1
+
+
+def test_pay_with_x402_server_error_is_not_retried(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.post(f"{CORE}/invoices/inv_1/pay_with_x402", status_code=503, json={})
+    with pytest.raises(NozleAPIError):
+        client().invoices.pay_with_x402("inv_1", "0x" + "ab" * 32)
+    assert requests_mock.call_count == 1

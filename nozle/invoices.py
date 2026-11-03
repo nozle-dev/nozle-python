@@ -7,7 +7,7 @@ from typing import Any, Dict, Mapping, Optional, cast
 from nozle._operation import M, Resource, Steps, endpoint
 from nozle._validation import path_segment, require_non_empty, require_secret_key
 from nozle.errors import NozleAPIError
-from nozle.types import Invoice, InvoicePage
+from nozle.types import Invoice, InvoicePage, X402Requirements
 
 
 class InvoicesNamespace(Resource[M]):
@@ -89,6 +89,40 @@ class InvoicesNamespace(Resource[M]):
             "POST",
             f"/api/v1/invoices/{path_segment(invoice_id)}/pay_with_agent_token",
             json_body={"agent_payment_token": agent_payment_token},
+        )
+        return cast(Invoice, _object(operation, payload)["invoice"])
+
+    @endpoint
+    def get_x402_requirements(self, invoice_id: str) -> Steps[X402Requirements]:
+        """The x402 (v2) payment requirements for a finalized USD invoice: the USDC amount and the
+        Stripe deposit address (``payTo``) to relay to a paying agent in an HTTP 402 response.
+        Needs the ``stripe_x402_payments`` workspace flag and a Stripe connection. A refusal raises
+        ``NozleAPIError``; test with ``has_code(X402ErrorCode.FEATURE_NOT_ENABLED)``,
+        ``INVOICE_NOT_PAYABLE``, ``USD_REQUIRED`` or ``STRIPE_REQUIRED``."""
+        operation = "invoices.get_x402_requirements"
+        require_secret_key(self._api_key, operation)
+        require_non_empty(invoice_id, "invoice_id", operation)
+        payload = yield self._transport.call(
+            operation, "GET", f"/api/v1/invoices/{path_segment(invoice_id)}/x402_requirements"
+        )
+        return cast(X402Requirements, _object(operation, payload)["x402_requirements"])
+
+    @endpoint
+    def pay_with_x402(self, invoice_id: str, transaction_hash: str) -> Steps[Invoice]:
+        """Pay a finalized USD invoice with the hash of an on-chain USDC transfer the agent sent
+        to the ``payTo`` address of :meth:`get_x402_requirements`. Returns the invoice; the
+        payment is often still ``processing`` and finishes through Stripe's webhook. One
+        transaction pays one invoice once. Refusals as in :meth:`get_x402_requirements`, plus
+        ``INVALID_FORMAT`` for a malformed hash. Never retried."""
+        operation = "invoices.pay_with_x402"
+        require_secret_key(self._api_key, operation)
+        require_non_empty(invoice_id, "invoice_id", operation)
+        require_non_empty(transaction_hash, "transaction_hash", operation)
+        payload = yield self._transport.call(
+            operation,
+            "POST",
+            f"/api/v1/invoices/{path_segment(invoice_id)}/pay_with_x402",
+            json_body={"transaction_hash": transaction_hash},
         )
         return cast(Invoice, _object(operation, payload)["invoice"])
 
