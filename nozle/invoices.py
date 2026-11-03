@@ -73,6 +73,25 @@ class InvoicesNamespace(Resource[M]):
         invoice = payload.get("invoice")
         return invoice.get("file_url") if isinstance(invoice, Mapping) else None
 
+    @endpoint
+    def pay_with_agent_token(self, invoice_id: str, agent_payment_token: str) -> Steps[Invoice]:
+        """Pay a finalized invoice with a Stripe Shared Payment Token (``spt_...``) an AI agent
+        handed you. Needs the ``stripe_agent_payment_token`` workspace flag and a Stripe connection;
+        returns the invoice. A refused token raises ``NozleAPIError`` (422)
+        with the code in ``error_details`` (``token_expired``, ``currency_mismatch``,
+        ``amount_exceeds_limit``, ``token_deactivated``, ``invalid_format``). Never retried."""
+        operation = "invoices.pay_with_agent_token"
+        require_secret_key(self._api_key, operation)
+        require_non_empty(invoice_id, "invoice_id", operation)
+        require_non_empty(agent_payment_token, "agent_payment_token", operation)
+        payload = yield self._transport.call(
+            operation,
+            "POST",
+            f"/api/v1/invoices/{path_segment(invoice_id)}/pay_with_agent_token",
+            json_body={"agent_payment_token": agent_payment_token},
+        )
+        return cast(Invoice, _object(operation, payload)["invoice"])
+
 
 def _object(operation: str, payload: Any) -> Mapping[str, Any]:
     if not isinstance(payload, Mapping):

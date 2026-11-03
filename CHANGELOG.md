@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `invoices.pay_with_agent_token(invoice_id, agent_payment_token)` on `Nozle` and `AsyncNozle`: pays a finalized invoice with a Stripe Shared Payment Token an AI agent granted. Needs the `stripe_agent_payment_token` workspace flag. Never retried.
+
+### Fixed
+
+- Error response details no longer blank `error_details`: a refusal such as `{"agent_payment_token": ["token_expired"]}` stays readable in `response_details`, because its key ends in `_token`.
+
 ## 0.36.0 — 2026-11-02
 
 Needs a Core with Stripe Tax (Core 11.32.0) to set `tax_provider="stripe_tax"`.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import requests_mock
 
-from nozle import Nozle, NozleAuthenticationError
+from nozle import Nozle, NozleAPIError, NozleAuthenticationError
 
 CORE = "https://api.example/core/api/v1"
 INVOICE = {"nozle_id": "inv_1", "number": "INV-1", "file_url": "https://files.example/inv_1.pdf"}
@@ -40,3 +40,35 @@ def test_get_and_secret_key(requests_mock: requests_mock.Mocker) -> None:
     assert client().invoices.get("inv_1")["nozle_id"] == "inv_1"
     with pytest.raises(NozleAuthenticationError):
         Nozle("pk_test").invoices.get("inv_1")
+
+
+def test_pay_with_agent_token_posts_the_token(requests_mock: requests_mock.Mocker) -> None:
+    route = requests_mock.post(
+        f"{CORE}/invoices/inv_1/pay_with_agent_token", json={"invoice": INVOICE}
+    )
+    invoice = client().invoices.pay_with_agent_token("inv_1", "spt_123abc")
+    assert invoice["nozle_id"] == "inv_1"
+    assert route.last_request.json() == {"agent_payment_token": "spt_123abc"}
+
+
+def test_pay_with_agent_token_refusal_and_secret_key(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    requests_mock.post(
+        f"{CORE}/invoices/inv_1/pay_with_agent_token",
+        status_code=422,
+        json={
+            "status": 422,
+            "error": "Unprocessable Entity",
+            "error_details": {"agent_payment_token": ["token_expired"]},
+        },
+    )
+    with pytest.raises(NozleAPIError) as caught:
+        client().invoices.pay_with_agent_token("inv_1", "spt_123abc")
+    assert caught.value.status_code == 422
+    # The refusal code must survive response sanitizing (the key ends in _token).
+    details = caught.value.response_details["error_details"]
+    assert details == {"agent_payment_token": ["token_expired"]}
+    assert requests_mock.call_count == 1
+    with pytest.raises(NozleAuthenticationError):
+        Nozle("pk_test").invoices.pay_with_agent_token("inv_1", "spt_x")
