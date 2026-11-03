@@ -1194,6 +1194,27 @@ class InvoicePage(TypedDict):
     meta: Dict[str, Any]
 
 
+class X402Accept(TypedDict):
+    """One way to pay: send ``amount`` (USDC atomic units, a string) of ``asset`` on ``network``
+    to ``payTo``. Keys keep Core's camelCase."""
+
+    scheme: str
+    network: str
+    amount: str
+    asset: str
+    payTo: str
+    maxTimeoutSeconds: int
+    extra: Dict[str, Any]
+
+
+class X402Requirements(TypedDict):
+    """x402 v2 payment requirements for an invoice, to relay to the paying agent in a 402."""
+
+    x402Version: int
+    accepts: List[X402Accept]
+    resource: Dict[str, Any]
+
+
 CreditNoteReason = Literal[
     "duplicated_charge",
     "product_unsatisfactory",

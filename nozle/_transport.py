@@ -340,13 +340,17 @@ class AsyncHttpTransport(BaseTransport[Async]):
         return run_all
 
 
-def _sanitize(value: Any, api_key: str) -> Any:
+def _sanitize(value: Any, api_key: str, keys_are_fields: bool = False) -> Any:
     if isinstance(value, dict):
         sanitized: Dict[str, Any] = {}
         for raw_key, raw_value in value.items():
             key = str(raw_key)
             normalized = key.lower().replace("-", "_")
-            if (
+            if normalized == "error_details":
+                # Keys name the failed field (for example agent_payment_token), values are
+                # error codes, never secrets, so callers can branch on the code.
+                sanitized[key] = _sanitize(raw_value, api_key, keys_are_fields=True)
+            elif not keys_are_fields and (
                 normalized in _SENSITIVE_KEYS
                 or normalized.endswith("_secret")
                 or normalized.endswith("_token")
@@ -354,10 +358,10 @@ def _sanitize(value: Any, api_key: str) -> Any:
             ):
                 sanitized[key] = "[REDACTED]"
             else:
-                sanitized[key] = _sanitize(raw_value, api_key)
+                sanitized[key] = _sanitize(raw_value, api_key, keys_are_fields)
         return sanitized
     if isinstance(value, list):
-        return [_sanitize(item, api_key) for item in value]
+        return [_sanitize(item, api_key, keys_are_fields) for item in value]
     if isinstance(value, str):
         return value.replace(api_key, "[REDACTED]")[:2048]
     return value

@@ -52,6 +52,21 @@ class CustomerTaxErrorCode(str, Enum):
     TAX_PROVIDER_UNAVAILABLE = "tax_provider_unavailable"
 
 
+class X402ErrorCode(str, Enum):
+    """Codes of a refused ``invoices.get_x402_requirements`` or ``invoices.pay_with_x402``.
+    ``FEATURE_NOT_ENABLED`` (403) and ``INVOICE_NOT_PAYABLE`` are the top-level ``code``;
+    ``USD_REQUIRED`` (``error_details["currency"]``), ``STRIPE_REQUIRED``
+    (``error_details["payment_provider"]``) and ``INVALID_FORMAT``
+    (``error_details["transaction_hash"]``) arrive in a 422. Test with
+    ``error.has_code(X402ErrorCode.USD_REQUIRED)``."""
+
+    FEATURE_NOT_ENABLED = "feature_not_enabled"
+    INVOICE_NOT_PAYABLE = "invoice_not_payable"
+    USD_REQUIRED = "usd_required"
+    STRIPE_REQUIRED = "stripe_required"
+    INVALID_FORMAT = "invalid_format"
+
+
 class RefusalReason(str, Enum):
     """Why ``can()``, ``usage.check()``, ``usage.track()`` or a hold answers ``allowed: False``
     (its ``reason``), and the ``code`` of the LLM proxy's 402/429 refusals.
