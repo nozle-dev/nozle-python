@@ -477,12 +477,23 @@ nozle.credit_notes.create(
     "inv_123", items, refund_amount_cents=300, credit_amount_cents=200, reason="order_change"
 )
 
+# 2c. Record a refund you paid back yourself (bank transfer, cash). Nothing goes to a provider.
+nozle.credit_notes.create(
+    "inv_123",
+    items,
+    refund_amount_cents=500,
+    out_of_band_refund_amount_cents=500,  # the part of refund_amount_cents paid out of band
+    out_of_band_refund_reference="BANK-2026-11-14",
+)
+
 nozle.credit_notes.list(customer_id="cus_1", refund_status="failed")
 nozle.credit_notes.get(note["nozle_id"])
 nozle.credit_notes.void(note["nozle_id"])  # voids the unused credit; never undoes a paid refund
 ```
 
 `reason` is one of `duplicated_charge`, `product_unsatisfactory`, `order_change`, `order_cancellation`, `fraudulent_charge`, `other` (default). `refund()` raises `NozleAPIError` with code `refund_exceeds_paid_amount` and creates nothing when less was paid than the items are worth; pass `credit_remainder=True` to refund what was paid and credit the rest.
+
+`refund()` refunds through the payment provider only. When the invoice was marked paid without a provider payment, or paid through a provider Nozle cannot refund through, Core refuses with `MANUAL_REFUND_REQUIRED` or `PROVIDER_REFUND_UNSUPPORTED`: use `create()` with `out_of_band_refund_amount_cents` (Core 11.46.0). `INSUFFICIENT_REFUNDABLE_AMOUNT` means the provider payments still hold less than the online part. After a lost dispute, an invoice's `total_due_amount_cents` is what is owed again and `disputed_amount_cents` is what the dispute took back.
 
 ### Billing entities
 
@@ -497,7 +508,7 @@ nozle.billing_entities.list()["billing_entities"]
 
 `tax_provider` is `"nozle"` or `"stripe_tax"` (needs a connected Stripe account). Other Core fields go as keywords; an unknown field raises `NozleValidationError`.
 
-The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `max_retries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list(customer_id=..., invoice_number=...)` before trying again. Test errors with `error.has_code(CANNOT_REFUND_UNPAID_INVOICE)` (also `HIGHER_THAN_REMAINING_INVOICE_AMOUNT`, `HIGHER_THAN_REMAINING_FEE_AMOUNT`, `DOES_NOT_MATCH_ITEM_AMOUNTS`, `INVALID_TYPE_OR_STATUS`, `NO_VOIDABLE_AMOUNT`). Nozle stores only the provider's refund id and status, never card or bank details.
+The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `max_retries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list(customer_id=..., invoice_number=...)` before trying again. Test errors with `error.has_code(CANNOT_REFUND_UNPAID_INVOICE)` (also `HIGHER_THAN_REMAINING_INVOICE_AMOUNT`, `HIGHER_THAN_REMAINING_FEE_AMOUNT`, `DOES_NOT_MATCH_ITEM_AMOUNTS`, `INVALID_TYPE_OR_STATUS`, `NO_VOIDABLE_AMOUNT`, `MANUAL_REFUND_REQUIRED`, `PROVIDER_REFUND_UNSUPPORTED`, `INSUFFICIENT_REFUNDABLE_AMOUNT`). Nozle stores only the provider's refund id and status, never card or bank details.
 
 ## Existing operations
 

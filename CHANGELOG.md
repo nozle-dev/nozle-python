@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.39.0 — 2026-11-14
+
+Matches Core 11.45.0 to 11.46.1 (lost disputes and out-of-band refunds). The out-of-band fields need Core 11.46.0.
+
+### Added
+
+- `credit_notes.create(...)` takes `out_of_band_refund_amount_cents`, `out_of_band_refund_reference` and `out_of_band_refunded_at`: the part of `refund_amount_cents` the merchant paid back outside any payment provider (bank transfer, cash). Nozle sends it to no provider and settles it at once. A negative or fractional amount raises `NozleValidationError` before any request.
+- `CreditNote` carries `out_of_band_refund_amount_cents`, `out_of_band_refund_reference` and `out_of_band_refunded_at`.
+- `Invoice` declares `total_due_amount_cents`, `total_paid_amount_cents` and the new `disputed_amount_cents`. After a lost dispute `total_due_amount_cents` is what is owed again (it was 0), and `total_paid_amount_cents` stays gross, so it can be above `total_amount_cents` after a recovery payment.
+- Credit note error codes `MANUAL_REFUND_REQUIRED` and `PROVIDER_REFUND_UNSUPPORTED` (record the refund out of band instead) and `INSUFFICIENT_REFUNDABLE_AMOUNT`, for `error.has_code(...)`.
+
+### Changed
+
+- `AGENTS.md` has the testing safety rules for agents and scripts working in this repository.
 ## 0.38.0 — 2026-11-13
 
 ### Removed

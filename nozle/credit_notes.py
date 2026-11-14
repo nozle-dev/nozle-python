@@ -34,12 +34,17 @@ DOES_NOT_MATCH_ITEM_AMOUNTS = "does_not_match_item_amounts"
 TOTAL_AMOUNT_MUST_BE_POSITIVE = "total_amount_must_be_positive"
 NO_VOIDABLE_AMOUNT = "no_voidable_amount"
 REFUND_EXCEEDS_PAID_AMOUNT = "refund_exceeds_paid_amount"
+#: On ``refund_amount_cents`` (Core 11.46.0). The first two mean no provider can refund the online
+#: part: record it with ``out_of_band_refund_amount_cents`` instead.
+MANUAL_REFUND_REQUIRED = "manual_refund_required"
+PROVIDER_REFUND_UNSUPPORTED = "provider_refund_unsupported"
+INSUFFICIENT_REFUNDABLE_AMOUNT = "insufficient_refundable_amount"
 
 
 class CreditNotesNamespace(Resource[M]):
     """Credit notes lower a finalized invoice. Their total is credited to the customer's balance,
-    refunded to the original payment method (Stripe or Razorpay, started by Nozle), offset against
-    what the customer still owes, or split between the three.
+    refunded to the original payment method (Stripe or Razorpay, started by Nozle) or recorded as
+    paid back out of band, offset against what the customer still owes, or split between the three.
 
     These calls send no ``Idempotency-Key`` yet, so ``create()``,
     ``refund()`` and ``void()`` are never retried, whatever ``max_retries`` says; ``preview()``,
@@ -65,6 +70,9 @@ class CreditNotesNamespace(Resource[M]):
         reason: Optional[CreditNoteReason] = None,
         description: Optional[str] = None,
         metadata: Optional[Mapping[str, Optional[str]]] = None,
+        out_of_band_refund_amount_cents: Optional[int] = None,
+        out_of_band_refund_reference: Optional[str] = None,
+        out_of_band_refunded_at: Optional[str] = None,
     ) -> Steps[CreditNote]:
         """Issues a credit note. The three amounts must add up to the total of ``items`` with
         taxes (take it from ``preview()``) and at least one must be above zero.
@@ -72,6 +80,12 @@ class CreditNotesNamespace(Resource[M]):
         ``credit_amount_cents`` goes to the customer's balance, ``refund_amount_cents`` back to the
         original payment method (only what was paid and not refunded yet; follow ``refund_status``
         with ``get()``), ``offset_amount_cents`` off what the customer still owes on the invoice.
+
+        ``out_of_band_refund_amount_cents`` is the part of ``refund_amount_cents`` you paid back
+        yourself (bank transfer, cash); Nozle sends it to no provider and settles it at once, with
+        an optional ``out_of_band_refund_reference`` and ``out_of_band_refunded_at`` (ISO 8601,
+        default now). Use it when Core refuses the online part with ``manual_refund_required`` or
+        ``provider_refund_unsupported``. Needs Core 11.46.0.
         """
         operation = "credit_notes.create"
         return (
@@ -85,6 +99,9 @@ class CreditNotesNamespace(Resource[M]):
                 reason,
                 description,
                 metadata,
+                out_of_band_refund_amount_cents,
+                out_of_band_refund_reference,
+                out_of_band_refunded_at,
             )
         )
 
@@ -105,6 +122,10 @@ class CreditNotesNamespace(Resource[M]):
         When less was paid than the items are worth this raises ``NozleAPIError`` with code
         ``refund_exceeds_paid_amount`` and creates nothing, unless ``credit_remainder=True``: then
         what was paid is refunded and the rest credited to the customer's balance.
+
+        Every cent is refunded through the payment provider. For an invoice paid outside one
+        (Core answers ``manual_refund_required`` or ``provider_refund_unsupported``) use
+        ``create()`` with ``out_of_band_refund_amount_cents``.
         """
         operation = "credit_notes.refund"
         preview = yield from self._preview(invoice_id, items, operation)
@@ -231,6 +252,9 @@ class CreditNotesNamespace(Resource[M]):
         reason: Optional[str],
         description: Optional[str],
         metadata: Optional[Mapping[str, Optional[str]]],
+        out_of_band_refund_amount_cents: Optional[int] = None,
+        out_of_band_refund_reference: Optional[str] = None,
+        out_of_band_refunded_at: Optional[str] = None,
     ) -> Steps[CreditNote]:
         require_secret_key(self._api_key, operation)
         require_non_empty(invoice_id, "invoice_id", operation)
@@ -240,7 +264,10 @@ class CreditNotesNamespace(Resource[M]):
             ("refund_amount_cents", refund_amount_cents),
             ("offset_amount_cents", offset_amount_cents),
         )
-        for name, value in amounts:
+        for name, value in (
+            *amounts,
+            ("out_of_band_refund_amount_cents", out_of_band_refund_amount_cents),
+        ):
             if value is not None and (type(value) is not int or value < 0):
                 raise NozleValidationError(f"{operation} {name} must be whole cents, 0 or more")
         if sum(value or 0 for _, value in amounts) <= 0:
@@ -255,6 +282,9 @@ class CreditNotesNamespace(Resource[M]):
             reason=reason,
             description=description,
             metadata=None if metadata is None else dict(metadata),
+            out_of_band_refund_amount_cents=out_of_band_refund_amount_cents,
+            out_of_band_refund_reference=out_of_band_refund_reference,
+            out_of_band_refunded_at=out_of_band_refunded_at,
         )
         credit_note.update({name: value for name, value in optional.items() if value is not None})
         payload = yield self._transport.call(

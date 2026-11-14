@@ -132,6 +132,9 @@ CALLS: list[Callable[[Nozle], Any]] = [
         reason="duplicated_charge",
         description="Charged twice",
         metadata={"ticket": "T-1"},
+        out_of_band_refund_amount_cents=200,
+        out_of_band_refund_reference="BANK-1",
+        out_of_band_refunded_at="2026-11-14T10:00:00Z",
     ),
     lambda n: n.credit_notes.void("cn_1"),
     lambda n: n.billing_entities.create(
