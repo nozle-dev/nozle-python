@@ -1461,20 +1461,6 @@ class MarginTrend(TypedDict):
     trend: Optional[List[MarginTrendPoint]]
 
 
-class MarginForecastPoint(TypedDict):
-    date: str
-    projected_revenue: int
-    projected_cost: int
-    projected_margin: int
-
-
-class MarginForecast(TypedDict):
-    """``GET /margin/forecast``: daily projection for the 30 days after the range (cents)."""
-
-    points: List[MarginForecastPoint]
-    confidence: Literal["low", "medium", "high"]
-
-
 class MarginSimulation(TypedDict):
     """``POST /margin/simulate``: one metric's usage replayed at a new unit price (cents)."""
 

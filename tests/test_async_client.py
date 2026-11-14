@@ -189,7 +189,6 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.plan_versions.get_migration("pro", "mig_1"),
     lambda n: n.plan_versions.cancel_migration("pro", "mig_1"),
     lambda n: n.can("cust", "export", subscription_id="sub_1", entity_id="ent_1"),
-    lambda n: n.margin.forecast(from_date="2026-10-01"),
     lambda n: n.margin.simulate("agent_execution", 1.5, from_date="2026-10-01"),
     lambda n: n.cost_intelligence.report(from_date="2026-10-01", limit=10),
     lambda n: n.cost_intelligence.preview_shared_cost_allocation("pool_1", STAMP),

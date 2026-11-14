@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.38.0 — 2026-11-13
+
+### Removed
+
+- `margin.forecast(**params)` (`GET /margin/forecast`) and its `MarginForecast`/`MarginForecastPoint` types. Engine no longer serves that route; every call 404ed. Breaking: remove the call site if you used it.
+
 ## 0.37.0 — 2026-11-03
 
 ### Added

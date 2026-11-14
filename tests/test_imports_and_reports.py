@@ -136,17 +136,12 @@ def test_imports_need_a_secret_key_and_a_customer() -> None:
     assert not mock.called
 
 
-def test_margin_forecast_and_simulate() -> None:
+def test_margin_simulate() -> None:
     simulation = {"metric_code": "agent_execution", "new_revenue_cents": 29500, "event_count": 295}
     with requests_mock.Mocker() as mock:
-        forecast = mock.get(
-            f"{ENGINE}/api/v1/margin/forecast", json={"points": [], "confidence": "low"}
-        )
         simulate = mock.post(f"{ENGINE}/api/v1/margin/simulate", json=simulation)
         nozle = client()
-        assert nozle.margin.forecast(from_date="2026-10-01") == {"points": [], "confidence": "low"}
         assert nozle.margin.simulate("agent_execution", 1, from_date="2026-07-01") == simulation
-    assert forecast.last_request.qs == {"from_date": ["2026-10-01"]}
     assert simulate.last_request.qs == {"from_date": ["2026-07-01"]}
     assert simulate.last_request.json() == {
         "metric_code": "agent_execution",
@@ -156,12 +151,7 @@ def test_margin_forecast_and_simulate() -> None:
 
 def test_margin_errors_and_local_validation() -> None:
     with requests_mock.Mocker() as mock:
-        mock.get(
-            requests_mock.ANY, json={"code": "invalid_date_range", "error": "bad"}, status_code=400
-        )
         mock.post(requests_mock.ANY, json={"code": "analytics_unavailable"}, status_code=503)
-        with pytest.raises(NozleAPIError) as forecast_error:
-            client().margin.forecast(from_date="x")
         with pytest.raises(NozleAPIError) as simulate_error:
             client().margin.simulate("m", 0)
         calls = mock.call_count
@@ -171,10 +161,6 @@ def test_margin_errors_and_local_validation() -> None:
         with pytest.raises(NozleValidationError, match="metric_code"):
             client().margin.simulate("", 1)
         assert mock.call_count == calls
-    assert (forecast_error.value.status_code, forecast_error.value.code) == (
-        400,
-        "invalid_date_range",
-    )
     assert simulate_error.value.code == "analytics_unavailable"
 
 

@@ -12,7 +12,6 @@ from nozle.types import (
     MarginByMetric,
     MarginByModel,
     MarginByPlan,
-    MarginForecast,
     MarginSimulation,
     MarginSummary,
     MarginTrend,
@@ -64,11 +63,6 @@ class MarginClient(Resource[M]):
         query = {key: value for key, value in params.items() if value is not None}
         query["granularity"] = granularity
         return cast(MarginTrend, (yield from self._get("trend", "/trend", query)))
-
-    @endpoint
-    def forecast(self, **params: Optional[str]) -> Steps[MarginForecast]:
-        """Daily revenue, cost and margin projected for the 30 days after the range."""
-        return cast(MarginForecast, (yield from self._get("forecast", "/forecast", params)))
 
     @endpoint
     def simulate(

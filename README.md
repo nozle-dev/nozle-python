@@ -527,7 +527,6 @@ health = nozle.ping()
 summary = nozle.margin.summary()
 by_customer = nozle.margin.by_customer()
 trend = nozle.margin.trend(granularity="week")
-forecast = nozle.margin.forecast()  # next 30 days from the last month's daily trend
 simulation = nozle.margin.simulate("agent_execution", 1.0, from_date="2026-10-01")
 
 report = nozle.cost_intelligence.report(from_date="2026-10-01T00:00:00Z", limit=50)
