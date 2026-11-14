@@ -1708,6 +1708,24 @@
        "null"
       ]
      },
+     "out_of_band_refund_amount_cents": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "out_of_band_refund_reference": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "out_of_band_refunded_at": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "reason": {
       "enum": [
        "duplicated_charge",

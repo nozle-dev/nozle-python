@@ -1180,6 +1180,13 @@ class Invoice(_InvoiceRequired, total=False):
 
     payment_due_date: Optional[str]
     payment_overdue: bool
+    #: What is owed. After a lost dispute it is what the dispute took back, less what was paid
+    #: since (Core 11.45.0); it was 0 before.
+    total_due_amount_cents: int
+    #: Gross: after a lost dispute and a recovery payment it can be above ``total_amount_cents``.
+    total_paid_amount_cents: int
+    #: What lost disputes took back from the invoice's payments; 0 without one (Core 11.45.0).
+    disputed_amount_cents: int
     file_url: Optional[str]
     customer: Dict[str, Any]
     #: From Cores with customer tax data: ``pending``, ``succeeded`` or ``failed``.
@@ -1254,6 +1261,10 @@ class CreditNote(_CreditNoteRequired, total=False):
     credit_status: Optional[str]
     balance_amount_cents: int
     taxes_amount_cents: int
+    #: The part of ``refund_amount_cents`` paid back outside any payment provider (Core 11.46.0).
+    out_of_band_refund_amount_cents: int
+    out_of_band_refund_reference: Optional[str]
+    out_of_band_refunded_at: Optional[str]
     description: Optional[str]
     file_url: Optional[str]
     items: List[Dict[str, Any]]

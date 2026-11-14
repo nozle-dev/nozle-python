@@ -9,6 +9,7 @@ import requests_mock
 from nozle import (
     CANNOT_REFUND_UNPAID_INVOICE,
     HIGHER_THAN_REMAINING_INVOICE_AMOUNT,
+    MANUAL_REFUND_REQUIRED,
     NO_VOIDABLE_AMOUNT,
     REFUND_EXCEEDS_PAID_AMOUNT,
     Nozle,
@@ -91,6 +92,26 @@ def test_create_sends_amounts_reason_description_and_metadata(
         }
     }
     assert "Idempotency-Key" not in route.last_request.headers
+
+
+def test_create_sends_the_out_of_band_refund(requests_mock: requests_mock.Mocker) -> None:
+    route = requests_mock.post(CORE, json={"credit_note": NOTE})
+    client().credit_notes.create(
+        "inv_1",
+        ITEMS,
+        refund_amount_cents=600,
+        out_of_band_refund_amount_cents=600,
+        out_of_band_refund_reference="BANK-77",
+        out_of_band_refunded_at="2026-11-14T10:00:00Z",
+    )
+    assert route.last_request.json()["credit_note"] == {
+        "invoice_id": "inv_1",
+        "items": BODY_ITEMS,
+        "refund_amount_cents": 600,
+        "out_of_band_refund_amount_cents": 600,
+        "out_of_band_refund_reference": "BANK-77",
+        "out_of_band_refunded_at": "2026-11-14T10:00:00Z",
+    }
 
 
 def test_create_and_void_are_never_retried(requests_mock: requests_mock.Mocker) -> None:
@@ -210,6 +231,20 @@ def test_core_errors_carry_status_and_codes(requests_mock: requests_mock.Mocker)
     assert not caught.value.has_code(CANNOT_REFUND_UNPAID_INVOICE)
 
 
+def test_manual_refund_required_is_readable(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.post(
+        CORE,
+        **failure(
+            422,
+            code="validation_errors",
+            error_details={"refund_amount_cents": [MANUAL_REFUND_REQUIRED]},
+        ),
+    )
+    with pytest.raises(NozleAPIError) as caught:
+        client().credit_notes.create("inv_1", ITEMS, refund_amount_cents=600)
+    assert caught.value.has_code(MANUAL_REFUND_REQUIRED)
+
+
 def test_business_rule_forbidden_not_found_and_unauthorized(
     requests_mock: requests_mock.Mocker,
 ) -> None:
@@ -251,6 +286,12 @@ def test_business_rule_forbidden_not_found_and_unauthorized(
         (
             lambda n: n.credit_notes.create("inv_1", ITEMS, refund_amount_cents=-1),
             "refund_amount_cents",
+        ),
+        (
+            lambda n: n.credit_notes.create(
+                "inv_1", ITEMS, refund_amount_cents=1, out_of_band_refund_amount_cents=-1
+            ),
+            "out_of_band_refund_amount_cents",
         ),
         (
             lambda n: n.credit_notes.create("inv_1", ITEMS, credit_amount_cents=1, reason="bored"),

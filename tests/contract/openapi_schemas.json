@@ -83,7 +83,8 @@
       "shared_costs",
       "summary",
       "to",
-      "uncosted"
+      "uncosted",
+      "uncosted_models"
     ],
     "required": [
       "conflicts",
@@ -350,6 +351,7 @@
       "credit_notes_amount_cents",
       "currency",
       "customer",
+      "disputed_amount_cents",
       "fees_amount_cents",
       "file_url",
       "invoice_type",
@@ -487,6 +489,7 @@
       "pending_deletion",
       "plan_family_code",
       "prices",
+      "provider_tax_code",
       "taxes",
       "trial_period",
       "unpaid_invoice_grace_days",
@@ -615,6 +618,8 @@
       "economics",
       "feature_type",
       "limit",
+      "message",
+      "model",
       "overage",
       "policy",
       "reason",
