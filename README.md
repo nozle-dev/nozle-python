@@ -115,6 +115,11 @@ without `currency` gets each family's default-currency plans.
 A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every
 variant: `currency`, `interval`, `plan_code`, `amount_cents`).
 
+An archived plan takes no new subscriptions, and its existing subscriptions keep billing (Core
+11.51.0). Plans carry `status` (`active` or `archived`) and `archived_at`. With a secret key,
+`plans(status="archived")` lists only archived plans and `plans(status="active")` only the others;
+without `status` you get both. A publishable key never gets archived plans.
+
 `checkout()` and `subscribe()` take `plan_family_code=`, `interval=` and optional `currency=`
 instead of `plan_code`; Core picks the variant (without `currency`: the customer's locked
 currency, else the family's default). Needs Core 11.10.0.

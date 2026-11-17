@@ -159,6 +159,11 @@ class Plan(_PlanRequired, total=False):
     version: int
     #: Whether new subscriptions get this version.
     is_current: bool
+    #: ``archived`` plans take no new subscriptions; their existing subscriptions keep billing
+    #: (Core 11.51.0).
+    status: str
+    #: When the plan was archived, ``None`` while it is active (Core 11.51.0).
+    archived_at: Optional[str]
     #: The plan family this plan is a variant of. Absent for a plan without a family.
     family: PlanFamilyRef
     #: Every current variant of the family: one price per interval and currency.

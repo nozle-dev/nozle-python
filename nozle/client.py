@@ -238,16 +238,26 @@ class _BaseNozle(Resource[M]):
 
     @endpoint
     def plans(
-        self, *, currency: Optional[str] = None, external_customer_id: Optional[str] = None
+        self,
+        *,
+        currency: Optional[str] = None,
+        external_customer_id: Optional[str] = None,
+        status: Optional[str] = None,
     ) -> Steps[list[Plan]]:
         """The plan catalog. Without ``currency`` a secret key gets every plan in every currency;
         ``currency`` keeps that currency only (an unknown one is a 422), and
         ``external_customer_id`` (secret key only) the customer's locked currency, ignored when the
         organization allows several currencies per customer. A publishable key without
         ``currency`` gets each family's default-currency plans. A family plan carries ``family``
-        and ``prices`` (every variant)."""
+        and ``prices`` (every variant). ``status`` (``"active"`` or ``"archived"``, secret key only,
+        Core 11.51.0) lists one kind; without it a secret key gets both, and a publishable key never
+        gets archived plans."""
         require_catalog_key(self.api_key)
-        query = {"currency": currency, "external_customer_id": external_customer_id}
+        query = {
+            "currency": currency,
+            "external_customer_id": external_customer_id,
+            "status": status,
+        }
         params = {key: value for key, value in query.items() if value}
         payload = yield self._engine.call("plans", "GET", "/api/v1/plans", params=params or None)
         if not isinstance(payload, Mapping):
