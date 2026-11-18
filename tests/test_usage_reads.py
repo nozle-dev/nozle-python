@@ -4,6 +4,7 @@ import pytest
 import requests_mock
 
 from nozle import Nozle, NozleAuthenticationError
+from nozle.types import CustomerUsage
 
 CORE = "https://api.example/core/api/v1"
 PERIOD = {
@@ -29,6 +30,15 @@ def test_current_usage_uses_the_active_subscription(requests_mock: requests_mock
     )
     assert client().current_usage("cus 1") == PERIOD
     assert route.last_request.qs == {"external_subscription_id": ["sub_1"]}
+
+
+def test_current_usage_returns_the_usage_cap_amount(requests_mock: requests_mock.Mocker) -> None:
+    requests_mock.get(
+        f"{CORE}/customers/cus_1/current_usage",
+        json={"customer_usage": {**PERIOD, "usage_cap_amount_cents": 240}},
+    )
+    usage: CustomerUsage = client().current_usage("cus_1", "sub_1")
+    assert usage["usage_cap_amount_cents"] == 240
 
 
 def test_past_usage_passes_the_period_count(requests_mock: requests_mock.Mocker) -> None:

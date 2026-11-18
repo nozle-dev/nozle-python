@@ -1166,6 +1166,9 @@ class CustomerUsage(_CustomerUsageRequired, total=False):
 
     currency: str
     invoice_id: Optional[str]
+    #: Current usage only: the part of ``amount_cents`` past the invoice cap, not billed;
+    #: 0 without a cap (Core 11.55.0).
+    usage_cap_amount_cents: int
 
 
 class _InvoiceRequired(TypedDict):
