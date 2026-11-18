@@ -107,6 +107,8 @@ CALLS: list[Callable[[Nozle], Any]] = [
         cost_meter_code="llm_tokens", external_customer_id="cust", properties={"tokens": 5}
     ),
     lambda n: n.customers.upsert("cust", name="Acme"),
+    lambda n: n.customers.erase("cust"),
+    lambda n: n.customers.delete("cust"),
     lambda n: n.subscribe("cust", "pro"),
     lambda n: n.subscribe("cust", "pro", plan_version=1),
     lambda n: n.plan_versions.preview_migration("pro", 1),

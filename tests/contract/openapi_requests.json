@@ -3156,6 +3156,7 @@
   "type": "object"
  },
  "POST /core/api/v1/customers/{external_customer_id}/checkout_url": null,
+ "POST /core/api/v1/customers/{external_customer_id}/erase": null,
  "POST /core/api/v1/customers/{external_customer_id}/wallets": {
   "properties": {
    "wallet": {
