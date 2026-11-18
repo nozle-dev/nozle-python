@@ -265,6 +265,26 @@ If you create customers through the Nozle REST API instead of this SDK, a custom
 `sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider
 assignment is dropped.
 
+### Deleting and erasing a customer
+
+`customers.delete(external_id)` deletes the customer and ends its subscriptions. It is not an
+erasure: the customer's personal data stays. `customers.erase(external_id)` erases that personal
+data (GDPR), irreversibly, and returns the customer with `erased_at` set; Core finishes in the
+background and sends a `customer.erased` webhook. Erase refuses with 422 while the customer has
+active subscriptions or draft or unpaid invoices. Erasing an erased customer changes nothing.
+Neither call is retried automatically.
+
+```python
+from nozle import CustomerEraseErrorCode, NozleAPIError
+
+try:
+    customer = nozle.customers.erase("customer-123")
+    customer["erased_at"]  # "2026-11-18T10:00:00Z"
+except NozleAPIError as error:
+    if error.has_code(CustomerEraseErrorCode.HAS_UNPAID_INVOICES):
+        ...  # collect or void the open invoices first
+```
+
 ### Importing billing state and opening credit balances
 
 When you move customers from another billing system, import each subscription that system
