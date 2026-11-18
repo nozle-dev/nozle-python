@@ -1192,6 +1192,9 @@ class Invoice(_InvoiceRequired, total=False):
     total_paid_amount_cents: int
     #: What lost disputes took back from the invoice's payments; 0 without one (Core 11.45.0).
     disputed_amount_cents: int
+    #: Usage billed past the spend limit's invoice cap, taken back by a ``usage_cap`` credit;
+    #: 0 without a capped spend limit (Core 11.55.0).
+    usage_cap_amount_cents: int
     file_url: Optional[str]
     customer: Dict[str, Any]
     #: From Cores with customer tax data: ``pending``, ``succeeded`` or ``failed``.
