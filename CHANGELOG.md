@@ -2,7 +2,7 @@
 
 ## 0.42.0 — 2026-11-18
 
-Matches Core 11.55.0 (invoice usage cap). The new fields are optional: older Cores do not send them.
+Matches Core 11.53.0 (invoice usage cap). The new fields are optional: older Cores do not send them.
 
 ### Added
 

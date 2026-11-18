@@ -1167,7 +1167,7 @@ class CustomerUsage(_CustomerUsageRequired, total=False):
     currency: str
     invoice_id: Optional[str]
     #: Current usage only: the part of ``amount_cents`` past the invoice cap, not billed;
-    #: 0 without a cap (Core 11.55.0).
+    #: 0 without a cap (Core 11.53.0).
     usage_cap_amount_cents: int
 
 
@@ -1196,7 +1196,7 @@ class Invoice(_InvoiceRequired, total=False):
     #: What lost disputes took back from the invoice's payments; 0 without one (Core 11.45.0).
     disputed_amount_cents: int
     #: Usage billed past the spend limit's invoice cap, taken back by a ``usage_cap`` credit;
-    #: 0 without a capped spend limit (Core 11.55.0).
+    #: 0 without a capped spend limit (Core 11.53.0).
     usage_cap_amount_cents: int
     file_url: Optional[str]
     customer: Dict[str, Any]
