@@ -2,7 +2,7 @@
 
 ## 0.41.0 — 2026-11-18
 
-Matches Core 11.54.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
+Matches Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
 
 ### Added
 
