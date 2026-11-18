@@ -1288,6 +1288,27 @@ def test_plans_send_currency_and_customer_and_return_family_and_prices(
     assert requests_mock.last_request.query == ""
 
 
+def test_plans_send_status_and_return_archived_fields(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    plan = {
+        "code": "old",
+        "name": "Old",
+        "amount_cents": 900,
+        "amount_currency": "USD",
+        "interval": "monthly",
+        "status": "archived",
+        "archived_at": "2026-11-17T09:00:00Z",
+    }
+    requests_mock.get("https://api.example/engine/api/v1/plans", json={"plans": [plan]})
+    client = Nozle("sk_test", base_url="https://api.example/engine")
+
+    assert client.plans(status="archived") == [plan]
+    assert requests_mock.last_request.qs == {"status": ["archived"]}
+    client.plans()
+    assert requests_mock.last_request.query == ""
+
+
 def test_checkout_and_subscribe_by_plan_family(requests_mock: requests_mock.Mocker) -> None:
     requests_mock.post(
         "https://api.example/engine/api/v1/checkout", json={"type": "completed", "status": "ok"}

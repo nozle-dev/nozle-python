@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.40.0 — 2026-11-17
+
+Matches Core 11.51.0 (archived plans). The new fields need Core 11.51.0; older Cores do not send them.
+
+### Added
+
+- `Plan` carries `status` (`active` or `archived`) and `archived_at`. An archived plan takes no new subscriptions; its existing subscriptions keep billing.
+- `plans(status=...)` lists only `active` or only `archived` plans with a secret key. Without it a secret key gets both. A publishable key never gets archived plans.
+
 ## 0.39.0 — 2026-11-14
 
 Matches Core 11.45.0 to 11.46.1 (lost disputes and out-of-band refunds). The out-of-band fields need Core 11.46.0.
