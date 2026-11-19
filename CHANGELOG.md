@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.41.0 — 2026-11-18
+
+Matches Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
+
+### Added
+
+- `customers.erase(external_id)` (`POST /customers/{external_id}/erase`) erases a customer's personal data and returns the customer with `erased_at`. A 422 carries `CustomerEraseErrorCode` (`has_active_subscriptions`, `has_draft_invoices`, `has_unpaid_invoices`) in `error_details["customer"]`. A repeat call changes nothing. Not retried automatically.
+- `customers.delete(external_id)` (`DELETE /customers/{external_id}`) deletes a customer and ends its subscriptions. It is not an erasure. Not retried automatically.
+- `CustomerUpsertResult` carries `erased_at`.
+- `usage.track` and `usage.holds.finalize` raise Engine's 409 `period_invoiced` (usage dated in an invoiced period) as a `NozleAPIError` that `has_code(EventVoidErrorCode.PERIOD_INVOICED)`, and never retry it.
+
 ## 0.40.0 — 2026-11-17
 
 Matches Core 11.51.0 (archived plans). The new fields need Core 11.51.0; older Cores do not send them.

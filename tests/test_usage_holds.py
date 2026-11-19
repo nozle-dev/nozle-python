@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 import requests_mock
 
-from nozle import Nozle, NozleAPIError, NozleAuthenticationError, NozleValidationError
+from nozle import (
+    EventVoidErrorCode,
+    Nozle,
+    NozleAPIError,
+    NozleAuthenticationError,
+    NozleValidationError,
+)
 
 ENGINE = "https://api.example/engine"
 HOLDS = f"{ENGINE}/api/v1/usage/holds"
@@ -192,6 +198,26 @@ def test_engine_hold_errors_keep_their_code(
         holds().release("h1")
     assert raised.value.status_code == status
     assert raised.value.has_code(code)
+
+
+def test_track_and_finalize_raise_period_invoiced_without_a_retry(
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    refusal = {
+        "status_code": 409,
+        "json": {"code": "period_invoiced", "error_details": {"timestamp": ["period_invoiced"]}},
+    }
+    track = requests_mock.post(f"{ENGINE}/api/v1/usage/track", **refusal)
+    finalize = requests_mock.post(f"{HOLDS}/h1/finalize", **refusal)
+    usage = Nozle("sk_test", base_url=ENGINE, retry_delay=0).usage
+
+    with pytest.raises(NozleAPIError) as raised:
+        usage.track("acme", "emails", idempotency_key="t1", timestamp="2026-09-30T23:00:00Z")
+    assert raised.value.has_code(EventVoidErrorCode.PERIOD_INVOICED)
+    with pytest.raises(NozleAPIError) as raised:
+        usage.holds.finalize("h1")
+    assert raised.value.has_code(EventVoidErrorCode.PERIOD_INVOICED)
+    assert (track.call_count, finalize.call_count) == (1, 1)
 
 
 @pytest.mark.parametrize("ttl", [0, 86401, True, 1.5])

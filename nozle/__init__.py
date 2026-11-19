@@ -27,6 +27,7 @@ from nozle.entity_subscriptions import EntitySubscriptionsNamespace
 from nozle.errors import (
     NO_ACTIVE_SUBSCRIPTION,
     BudgetExceededError,
+    CustomerEraseErrorCode,
     CustomerTaxErrorCode,
     EventVoidErrorCode,
     NozleAPIError,
@@ -240,6 +241,7 @@ __all__ = [
     "RefusalReason",
     "TrialErrorCode",
     "X402ErrorCode",
+    "CustomerEraseErrorCode",
     "CustomerTaxErrorCode",
     "EventVoidErrorCode",
     "EventVoid",

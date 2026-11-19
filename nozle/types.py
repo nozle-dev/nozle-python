@@ -744,6 +744,8 @@ class CustomerUpsertResult(_CustomerUpsertResultRequired, total=False):
     tax_treatment: TaxTreatment
     #: Non-blocking notes on a write, for example ``country_mismatch``. Only on upsert responses.
     tax_identification_warnings: List[str]
+    #: When ``customers.erase`` erased the customer's personal data, ``None`` before (Core 11.52.0).
+    erased_at: Optional[str]
 
 
 class InvoiceTaxDetails(TypedDict, total=False):

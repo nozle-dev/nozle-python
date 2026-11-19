@@ -125,6 +125,30 @@ class CustomersNamespace(Resource[M]):
         return cast(CustomerUpsertResult, payload["customer"])
 
     @endpoint
+    def erase(self, external_id: str) -> Steps[CustomerUpsertResult]:
+        """Erase the customer's personal data (GDPR), irreversibly: Core sets ``erased_at`` and
+        finishes in the background. Refused with 422 while the customer has active subscriptions
+        or draft or unpaid invoices (``CustomerEraseErrorCode`` in ``error_details["customer"]``).
+        Erasing an erased customer changes nothing. Secret key."""
+        return (yield from self._write("customers.erase", "POST", external_id, "/erase"))
+
+    @endpoint
+    def delete(self, external_id: str) -> Steps[CustomerUpsertResult]:
+        """Delete the customer and end its subscriptions. Not an erasure: the customer's
+        personal data stays; use ``erase`` for that. Secret key."""
+        return (yield from self._write("customers.delete", "DELETE", external_id, ""))
+
+    def _write(
+        self, operation: str, method: str, external_id: str, suffix: str
+    ) -> Steps[CustomerUpsertResult]:
+        require_secret_key(self._api_key, operation)
+        require_non_empty(external_id, "external_id", operation)
+        payload = yield self._transport.call(
+            operation, method, f"/api/v1/customers/{path_segment(external_id)}{suffix}"
+        )
+        return cast(CustomerUpsertResult, payload["customer"])
+
+    @endpoint
     def wait_for_tax_check(
         self, external_id: str, *, timeout: float = 10.0, interval: float = 0.5
     ) -> Steps[CustomerUpsertResult]:

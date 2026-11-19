@@ -32,6 +32,16 @@ class EventVoidErrorCode(str, Enum):
     TRANSACTION_VOIDED = "transaction_voided"
 
 
+class CustomerEraseErrorCode(str, Enum):
+    """Why Core refused ``customers.erase``: a 422 with these codes in
+    ``error_details["customer"]``. Test with
+    ``error.has_code(CustomerEraseErrorCode.HAS_UNPAID_INVOICES)``."""
+
+    HAS_ACTIVE_SUBSCRIPTIONS = "has_active_subscriptions"
+    HAS_DRAFT_INVOICES = "has_draft_invoices"
+    HAS_UNPAID_INVOICES = "has_unpaid_invoices"
+
+
 class CustomerTaxErrorCode(str, Enum):
     """Codes for customer tax data. The first three arrive in ``error_details``
     (``tax_identification_type`` / ``tax_identification_number``) of a 422 ``customers.upsert``;
