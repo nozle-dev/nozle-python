@@ -21,6 +21,7 @@ from nozle.credit_notes import (
 )
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
+from nozle.customer_tokens import CustomerTokensNamespace
 from nozle.customers import CustomersNamespace
 from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
@@ -104,6 +105,8 @@ from nozle.types import (
     CustomerEntityStatus,
     CustomerEntityUpsertData,
     CustomerTaxId,
+    CustomerToken,
+    CustomerTokenRevocation,
     CustomerType,
     CustomerUpsertResult,
     CustomerUsage,
@@ -318,6 +321,9 @@ __all__ = [
     "CustomerAddress",
     "CustomerTaxId",
     "CustomerType",
+    "CustomerToken",
+    "CustomerTokenRevocation",
+    "CustomerTokensNamespace",
     "CustomerUpsertResult",
     "InvoiceTaxDetails",
     "TaxIdStatus",

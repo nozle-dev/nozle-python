@@ -285,6 +285,23 @@ except NozleAPIError as error:
         ...  # collect or void the open invoices first
 ```
 
+### Customer tokens for the browser
+
+`customer_tokens.create(customer_id, ttl_seconds=None, features=None)` mints a short-lived, read-only
+token for one customer (Core 11.59.0). The browser sends it as `X-Nozle-Customer-Token` with your
+publishable key and reads that customer's entitlements, usage, credit balances and subscription,
+nothing else. Take `customer_id` from your session, never from the request. `ttl_seconds` is 60 to
+3600 (one hour, also the default; Nozle answers 422 outside that range); `features` limits `can`
+and usage reads. Minting needs a secret key with `customer:read`. A token belongs to that customer
+record: deleting the customer ends its tokens. `customer_tokens.revoke()`, also with a secret key,
+refuses every token minted until now. Both work on `AsyncNozle` with `await`.
+
+```python
+@app.post("/customer-token")
+def customer_token(session: Session = Depends(current_session)):
+    return nozle.customer_tokens.create(session.workspace_id, ttl_seconds=900)
+```
+
 ### Importing billing state and opening credit balances
 
 When you move customers from another billing system, import each subscription that system

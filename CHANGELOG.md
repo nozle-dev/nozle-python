@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.42.0 — 2026-11-22
+
+Matches Core 11.59.0 and Engine 2.64.0 (customer tokens). Needs Core 11.59.0.
+
+### Added
+
+- `customer_tokens.create(customer_id, ttl_seconds=None, features=None)` (`POST /customer_tokens`, secret key with `customer:read`) mints a short-lived, read-only token that lets the signed-in customer's browser read that customer's entitlements, usage, credit balances and subscription with your publishable key. `ttl_seconds` is 60 to 3600 (one hour, also the default; Core answers 422 outside it). `features` limits `can` and usage reads. The token reads only what both the minting key and the publishable key may read, and stops working when its customer is deleted. Returns a `CustomerToken` (`token`, `customer_id`, `expires_at`). Core answers 403 `publishable_key_not_allowed` to a publishable key, 404 to an unknown customer. Retried like a read, because a repeat only mints another token.
+- `customer_tokens.revoke()` (`POST /customer_tokens/revoke`, `customer:write`) refuses every token minted until now and returns a `CustomerTokenRevocation` (`revoked_at`).
+
 ## 0.41.0 — 2026-11-18
 
 Matches Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.

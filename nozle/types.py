@@ -748,6 +748,20 @@ class CustomerUpsertResult(_CustomerUpsertResultRequired, total=False):
     erased_at: Optional[str]
 
 
+class CustomerToken(TypedDict):
+    #: Send it as ``X-Nozle-Customer-Token`` with a publishable key. A bearer credential: never
+    #: log it.
+    token: str
+    #: The customer's external id.
+    customer_id: str
+    #: ISO 8601.
+    expires_at: str
+
+
+class CustomerTokenRevocation(TypedDict):
+    revoked_at: str
+
+
 class InvoiceTaxDetails(TypedDict, total=False):
     treatment: TaxTreatment
     tax_identification_number: Optional[str]
