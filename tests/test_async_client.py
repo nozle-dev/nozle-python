@@ -150,6 +150,8 @@ CALLS: List[Callable[[Any], Any]] = [
     lambda n: n.credit_notes.list(customer_id="cust", refund_status="failed", per_page=5),
     lambda n: n.credit_notes.get("cn_1"),
     lambda n: n.credit_notes.void("cn_1"),
+    lambda n: n.customer_tokens.create("cust", 600, ["seats"]),
+    lambda n: n.customer_tokens.revoke(),
     lambda n: n.alerts.list(subscription_id="sub_1"),
     lambda n: n.alerts.get("a1", customer_id="cust", wallet_code="w"),
     lambda n: n.alerts.create("usage_amount", "a1", [{"value": 10}], subscription_id="sub_1"),

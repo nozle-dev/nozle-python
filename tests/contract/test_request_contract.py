@@ -108,6 +108,8 @@ CALLS: list[Callable[[Nozle], Any]] = [
     ),
     lambda n: n.customers.upsert("cust", name="Acme"),
     lambda n: n.customers.erase("cust"),
+    lambda n: n.customer_tokens.create("cust", 600, ["seats"]),
+    lambda n: n.customer_tokens.revoke(),
     lambda n: n.customers.delete("cust"),
     lambda n: n.subscribe("cust", "pro"),
     lambda n: n.subscribe("cust", "pro", plan_version=1),

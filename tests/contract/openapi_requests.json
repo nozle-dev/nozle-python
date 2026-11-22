@@ -1819,6 +1819,27 @@
   ],
   "type": "object"
  },
+ "POST /core/api/v1/customer_tokens": {
+  "properties": {
+   "customer_id": {
+    "type": "string"
+   },
+   "features": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "ttl_seconds": {
+    "type": "integer"
+   }
+  },
+  "required": [
+   "customer_id"
+  ],
+  "type": "object"
+ },
+ "POST /core/api/v1/customer_tokens/revoke": null,
  "POST /core/api/v1/customers": {
   "properties": {
    "customer": {

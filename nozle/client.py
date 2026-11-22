@@ -37,6 +37,7 @@ from nozle.cost_intelligence import CostIntelligenceNamespace
 from nozle.credit_notes import CreditNotesNamespace
 from nozle.credit_systems import CreditSystemsNamespace
 from nozle.credits import CreditsNamespace
+from nozle.customer_tokens import CustomerTokensNamespace
 from nozle.customers import CustomersNamespace
 from nozle.entities import EntitiesNamespace
 from nozle.entity_subscriptions import EntitySubscriptionsNamespace
@@ -154,6 +155,7 @@ class _BaseNozle(Resource[M]):
         self.webhooks = WebhooksNamespace(self._events, self.api_key)
         self.invoices = InvoicesNamespace(self._events, self.api_key)
         self.credit_notes = CreditNotesNamespace(self._events, self.api_key)
+        self.customer_tokens = CustomerTokensNamespace(self._events, self.api_key)
         self.alerts = AlertsNamespace(self._events, self.api_key)
         self.billing_entities = BillingEntitiesNamespace(self._events, self.api_key)
         self.plan_versions = PlanVersionsNamespace(self._events, self.api_key)
