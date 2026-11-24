@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   test-and-build:
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
