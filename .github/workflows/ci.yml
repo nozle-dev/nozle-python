@@ -11,7 +11,8 @@ permissions:
 jobs:
   test:
     name: Python ${{ matrix.python-version }}
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    # Python 3.9 builds exist for Ubuntu 22.04 and 24.04 only, not for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +27,7 @@ jobs:
       - run: python -m pytest -q
 
   quality:
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +39,7 @@ jobs:
       - run: mypy nozle examples/billing_portal
 
   package:
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,7 +49,7 @@ jobs:
       - run: python -m build
       - name: Install wheel into a fresh consumer
         run: |
-          echo "EXPECTED_VERSION=$(python -c 'from nozle import __version__; print(__version__)')" >> "$GITHUB_ENV"
+          echo "EXPECTED_VERSION=$(python -c 'import runpy; print(runpy.run_path("nozle/_version.py")["__version__"])')" >> "$GITHUB_ENV"
           python -m venv "${RUNNER_TEMP}/nozle-wheel-test"
           "${RUNNER_TEMP}/nozle-wheel-test/bin/pip" install dist/*.whl
       - name: Verify installed wheel
